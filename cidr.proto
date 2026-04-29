@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package ip;
+
+option go_package = "github.com/accretional/proto-ip/pb";
+
+message CIDR {
+  IP ip = 1;
+  Subnet subnet = 2;
+}
