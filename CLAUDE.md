@@ -11,3 +11,11 @@ Make sure to carefully study gluon's codebase to understand the tools available 
 You can use AST-AST transformations to handle the conversion to fixedlength messages using GrammarDescriptorProto, then another AST-AST transformation back to a single node bytes format I think.
 
 Take notes throughout your work to hlep you EXTENSIVELY in docs/impl-notes.md. Track your progress FREQUENTLY in docs/progress-log.md, maybe even after every few tool calls/actions.
+
+# Setup/Invariants
+
+Make sure you create a setup.sh, build.sh, test.sh, and LET_IT_RIP.sh that contain all project setup scripts/commands used - NEVER build/test/run the code in this repo outside of these scripts, NEVER commit or push without running these either. Make them idempotent so that each build.sh can run setup.sh and skip things already set up, each test.sh can run build.sh, each LET_IT_RIP runs test.sh
+
+Have LET_IT_RIP.sh run queries over the actual local grpc service to get local ips
+
+use go 1.26.
