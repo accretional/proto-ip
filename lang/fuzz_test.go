@@ -50,6 +50,11 @@ func loadFuzzGrammars(tb testing.TB) (*pb.GrammarDescriptor, *pb.GrammarDescript
 				fuzzGrammarsError = err
 				return nil
 			}
+			// Match the corpus-test loader: strip WHITESPACE
+			// delimiters so the parser doesn't skip any whitespace
+			// in input. The grammar is the spec; whitespace anywhere
+			// in an IP / CIDR string is invalid.
+			stripWhitespaceSymbols(gd)
 			return gd
 		}
 		fuzzIPv4Grammar = parse("ipv4", ipv4EBNF)
@@ -86,12 +91,6 @@ func FuzzIPv4(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, s string) {
-		// Skip inputs that contain whitespace or non-printable
-		// chars: gluon tolerates trailing whitespace by design and
-		// net.ParseIP doesn't, so they disagree on those by spec.
-		if hasWhitespace(s) {
-			t.Skip()
-		}
 		grammarOK := grammarAccepts(t, gd, s)
 		netOK := net.ParseIP(s).To4() != nil && !strings.Contains(s, ":")
 		if grammarOK != netOK {
@@ -116,9 +115,6 @@ func FuzzIPv6(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, s string) {
-		if hasWhitespace(s) {
-			t.Skip()
-		}
 		// Skip zone-bearing inputs: the grammar requires at least
 		// one zone_char after "%" (RFC 4007 leaves the zone format
 		// implementation-defined), but netip accepts a bare "%".
@@ -155,9 +151,6 @@ func FuzzCIDR(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, s string) {
-		if hasWhitespace(s) {
-			t.Skip()
-		}
 		grammarOK := grammarAccepts(t, gd, s)
 		_, err := netip.ParsePrefix(s)
 		netOK := err == nil
@@ -167,17 +160,4 @@ func FuzzCIDR(f *testing.F) {
 	})
 }
 
-// hasWhitespace reports whether s contains any ASCII whitespace.
-// Gluon tolerates trailing whitespace by design (matching
-// lexkit.Parse for EBNF source); net / netip don't, so the
-// agreement invariant doesn't apply to those inputs.
-func hasWhitespace(s string) bool {
-	for i := 0; i < len(s); i++ {
-		switch s[i] {
-		case ' ', '\t', '\n', '\r', '\v', '\f':
-			return true
-		}
-	}
-	return false
-}
 

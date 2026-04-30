@@ -61,8 +61,18 @@ func startMetaparser(t *testing.T) (pb.MetaparserClient, func()) {
 }
 
 // loadGrammar uploads ebnfSrc through ReadString → EBNF and returns
-// the resulting GrammarDescriptor. A grammar that fails to parse is a
-// programming error in our .ebnf, so this fatals the test.
+// the resulting GrammarDescriptor with all WHITESPACE delimiters
+// dropped from its lex. IP / CIDR strings are token-tight: ANY
+// internal whitespace is wrong, so the grammar's lex must not skip
+// whitespace between terminals. ParseEBNF returns a grammar with
+// the standard EBNF lex (space / tab / newline / CR as WHITESPACE);
+// we strip those symbols so gluon's ParseCST consumes input
+// strictly. (Implementation note: this rides on gluon's lex-driven
+// skipWSAndComments — see lexkit/expr.go LexConfig.Whitespace and
+// v2/metaparser/cst.go whitespaceFromV2Lex.)
+//
+// A grammar that fails to parse is a programming error in our
+// .ebnf, so this fatals the test.
 func loadGrammar(t *testing.T, c pb.MetaparserClient, name, ebnfSrc string) *pb.GrammarDescriptor {
 	t.Helper()
 	ctx := context.Background()
@@ -75,7 +85,28 @@ func loadGrammar(t *testing.T, c pb.MetaparserClient, name, ebnfSrc string) *pb.
 	if err != nil {
 		t.Fatalf("EBNF(%s.ebnf): %v", name, err)
 	}
+	stripWhitespaceSymbols(gd)
 	return gd
+}
+
+// stripWhitespaceSymbols removes every WHITESPACE delimiter from
+// the grammar's LexDescriptor in place. The remaining symbols
+// (DEFINITION, CONCATENATION, ALTERNATION, brackets, comments) are
+// what the rule-body re-parser needs; whitespace is the only role
+// we actively want gluon's CST parser to NOT skip.
+func stripWhitespaceSymbols(gd *pb.GrammarDescriptor) {
+	lex := gd.GetLex()
+	if lex == nil {
+		return
+	}
+	kept := lex.Symbols[:0]
+	for _, sym := range lex.GetSymbols() {
+		if d := sym.GetDelimiter(); d != nil && d.GetKind() == pb.Delimiter_WHITESPACE {
+			continue
+		}
+		kept = append(kept, sym)
+	}
+	lex.Symbols = kept
 }
 
 // runCorpus asserts that gluon's CST RPC accepts each entry whose
@@ -136,9 +167,14 @@ func TestIPv4Grammar(t *testing.T) {
 		{"01.2.3.4", false},
 		{"1.02.3.4", false},
 		{"00.0.0.0", false},
-		// trailing whitespace tolerated by gluon's parser
-		{"1.2.3.4 ", true},
+		// whitespace anywhere is rejected — the grammar's lex has no
+		// WHITESPACE symbols (stripped in loadGrammar), so gluon's
+		// CST parser doesn't skip ANY whitespace.
+		{"1.2.3.4 ", false},
 		{" 1.2.3.4", false},
+		{"1 .2.3.4", false},
+		{"1.\n2.3.4", false},
+		{"1.\t2.3.4", false},
 		// IPv6 input
 		{"::1", false},
 	})

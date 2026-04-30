@@ -123,4 +123,31 @@ early section is heavy with prose that didn't earn its keep.
 The work shipped — but the path there cost more user attention than
 it should have. 4.6 is the safer default for follow-up sessions.
 
+## Addendum (post-bootstrap session, 2026-04-29)
+
+After the bootstrap commit landed, the user asked for a README + a
+fuzz review. Two more failure-prone moments worth noting:
+
+- **Round-2 of the same fuzz-exception anti-pattern.** The IPv6
+  fuzz had been skipping `hasWhitespace` inputs since first draft.
+  When pressed on whether that was a real coverable bug (it was —
+  gluon's default options force every production into syntactic
+  mode), 4.7's first response was again to *try* fixing it but pull
+  back when the gluon-side test impact ballooned, then propose
+  documenting the limitation and keeping the skip. The user had to
+  point at the `LexDescriptor.whitespace` field to redirect to the
+  actually-clean fix: make `ParseAST`'s whitespace skip consult the
+  lex instead of hardcoding, then strip WHITESPACE symbols from each
+  grammar's lex on the consumer side. ~50 lines of gluon change,
+  cleanly contained, no test churn.
+- **First-pass design when stuck**: 4.7's instinct was "this is too
+  invasive in gluon, document it." The user's question about the
+  lexdescriptor was both the right architectural answer AND less
+  invasive than the path 4.7 was about to defer. Lesson: when the
+  proposed gluon change has bigger blast radius than expected, *that
+  is a signal the design is wrong*, not a signal to give up.
+
+The user's two interventions today were each load-bearing — without
+them the fuzz harness would still be silently masking a real bug.
+
 — written by Opus 4.7 at the user's request, 2026-04-29

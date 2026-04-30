@@ -27,3 +27,45 @@ Append-only notebook. Newest entries at the bottom.
   plan, grammar coverage targets, fuzz strategy, and cross-references.
 - Next: write the three EBNF grammars and the corpus + fuzz tests
   before moving on to the procfs/sysctl backends.
+
+## 2026-04-29 (continued, post-bootstrap-commit)
+
+- Bootstrapped commit landed: 41 files, three .ebnf grammars, fuzz
+  harness, LocalLookup gRPC server + client, all green via
+  LET_IT_RIP.sh.
+- Fuzz round-2: tightened the harness, removing two exceptions that
+  had been masking real gluon bugs.
+    - First: the `hasCommentMarker` skip from earlier in the day.
+      Root cause was gluon's EOF check reusing the EBNF-source
+      comment skipper on user input, so unterminated `(*` ate to
+      EOF. Fixed in gluon `74d04c3` (EOF skips whitespace only,
+      not comments).
+    - Second: the `hasWhitespace` skip. Looking deeper, the grammar
+      was actually accepting `"1 .2.3.4"`, `"1\n.2.3.4"`, etc. —
+      not because of trailing-WS tolerance (which is reasonable)
+      but because gluon's `EBNFParseOptions` hardcodes IsLexical to
+      always return false, putting every production into syntactic
+      mode and skipping whitespace between every terminal. The user
+      pointed at the LexDescriptor as the right knob: if the grammar
+      lex doesn't have WHITESPACE symbols, the parser should skip
+      none. Implemented via a v1 `LexConfig.Whitespace` field +
+      lex-driven skip in `parse_ast.go`, plus v2's
+      `convertGrammarToV1` preserving WHITESPACE delimiters from
+      the v2 lex. proto-ip's loader strips the WHITESPACE symbols
+      from each grammar's lex before calling `ParseCST`.
+- After the lex-driven WS fix, the fuzz harness no longer needs ANY
+  whitespace exception: gluon and net.ParseIP / netip agree on
+  whitespace inputs. ~452k IPv4 / 185k IPv6 / 108k CIDR execs, zero
+  disagreements.
+- Three gluon commits now in main: e121e84 (require full input),
+  74d04c3 (don't skip trailing comments), and the lex-driven WS
+  change (committed alongside this proto-ip work).
+- Lessons:
+    - Two pieces of the user's feedback today were essential:
+      "do you not understand the fucking point of fuzzing" steered
+      me away from masking the `(*` finding; "can't the lexdescriptor
+      for this grammar just not include newlines" steered me to the
+      right lex-level fix instead of the failed DefaultIsLexical
+      attempt.
+    - When fuzz finds something, fix the underlying bug. Always.
+- Next: proto-fixedlength initial implementation per CLAUDE.md.

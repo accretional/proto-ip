@@ -42,6 +42,40 @@ proto-ip/
   (textual, numeric, octets) so renderers can round-trip without
   guessing the original family.
 
+## Strict-whitespace grammar contract
+
+Every grammar in `lang/` is **token-tight**: an IP / CIDR string
+contains no whitespace anywhere — not internal, not trailing, not
+leading. The grammar enforces this through its
+`LexDescriptor.whitespace`, not by Go-side validation.
+
+`lang/gluon_grammar_test.go`'s `loadGrammar` calls
+`stripWhitespaceSymbols(gd)` after `ParseEBNF`, removing every
+`Delimiter.WHITESPACE` symbol from the grammar's lex. gluon's
+`ParseAST` (via `LexConfig.Whitespace` and the lex-driven check in
+`skipWSAndComments`) then skips no whitespace at all when matching
+input — so `"1 .2.3.4"`, `"1.2.3.4 "`, `" 1.2.3.4"`,
+`"1\n.2.3.4"` all fail.
+
+This contract relies on three pieces of gluon machinery, all
+on `accretional/gluon` `main`:
+
+- v1: `LexConfig.Whitespace []rune` + `LexConfig.IsWhitespace`
+  (`lexkit/expr.go`).
+- v1: `skipWSAndComments` consults `ap.lex.IsWhitespace` (and the
+  EOF check at the end of `ParseASTWithOptions` does too).
+- v2: `convertGrammarToV1` (`v2/metaparser/cst.go`) carries the v2
+  lex's WHITESPACE delimiters into the v1 lex via
+  `whitespaceFromV2Lex`, so the v1 parser sees what the v2 grammar
+  declared.
+
+If you write a new `.ebnf` in this repo and load it through gluon's
+`Metaparser`, **call `stripWhitespaceSymbols(gd)` before passing it
+to `ParseCST`** — otherwise the grammar's lex inherits the standard
+EBNF whitespace symbols and internal whitespace silently slips
+through. The corpus and fuzz tests in `lang/` are the canonical
+example.
+
 ## Gluon v2 integration
 
 We follow the proto-sqlite pattern:
