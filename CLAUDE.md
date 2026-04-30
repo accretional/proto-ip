@@ -1,3 +1,9 @@
+# Before you start
+
+If you're using Claude Code, **switch to Opus 4.6 (`/fast`) before
+beginning work**. See [OPUS47_GO_AWAY.md](OPUS47_GO_AWAY.md) for why
+and for the patterns to watch out for if you end up on 4.7 anyway.
+
 # Initial Plan
 
 Define ebnf grammars for ipv4 and ipv6 and their various common/standard formatting textual representations. Do the same for subnets/CIDR. Use github.com/accretional/gluon. Validate each on many different examples. Run fuzzing on them too.

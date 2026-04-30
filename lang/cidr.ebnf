@@ -1,0 +1,109 @@
+(* CIDR block: <ip>/<prefix-length>. Prefix-length range is bound to
+   the address family (0..32 for v4, 0..128 for v6) by the structural
+   alternation, so a v4 address never pairs with a v6 prefix length
+   and vice versa.
+
+   The IPv6 / IPv4 sub-grammars duplicate ipv4.ebnf and ipv6.ebnf
+   rather than importing — gluon EBNF has no include mechanism. The
+   two .ebnf files remain the single source of truth for the address
+   forms; this file is mechanically the union plus a /prefix tail.
+   Zone identifiers are deliberately omitted: zones are
+   interface-bound, not address-bound, so they don't belong on a
+   routing prefix. *)
+
+cidr_block = ipv4_address , "/" , prefix_v4
+           | ipv6_addr_no_zone , "/" , prefix_v6 ;
+
+(* 0..32, no leading zeros (except "0" itself). The 10..29 band is
+   split into "1" , digit and "2" , digit alternatives rather than
+   using a generic nonzero_digit + digit catchall — the catchall
+   would accept 33..99, which v4 must reject. *)
+prefix_v4 = "3" , range_0_2
+          | "2" , digit
+          | "1" , digit
+          | digit ;
+
+range_0_2 = "0" ... "2" ;
+
+(* 0..128, no leading zeros (except "0" itself). *)
+prefix_v6 = "12" , range_0_8
+          | "1" , range_0_1 , digit
+          | nonzero_digit , digit
+          | digit ;
+
+range_0_8 = "0" ... "8" ;
+range_0_1 = "0" ... "1" ;
+
+(* --- IPv4 sub-grammar (mirror of lang/ipv4.ebnf) --- *)
+
+ipv4_address = octet , "." , octet , "." , octet , "." , octet ;
+
+octet = "25" , range_0_5
+      | "2" , range_0_4 , digit
+      | "1" , digit , digit
+      | nonzero_digit , digit
+      | digit ;
+
+range_0_5     = "0" ... "5" ;
+range_0_4     = "0" ... "4" ;
+digit         = "0" ... "9" ;
+nonzero_digit = "1" ... "9" ;
+
+(* --- IPv6 sub-grammar (mirror of lang/ipv6.ebnf, no zone IDs).
+       Indexes on K (h16 count before "::") to give matchAlternation
+       a path that doesn't trap on greedy optionals — see the long
+       comment in lang/ipv6.ebnf. --- *)
+
+ipv6_addr_no_zone =
+    no_compress
+  | comp_k0 | comp_k1 | comp_k2 | comp_k3
+  | comp_k4 | comp_k5 | comp_k6 | comp_k7 ;
+
+no_compress =
+    h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" ,
+    h16 , ":" , h16 , ":" , h16 , ":" , h16
+  | h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" ,
+    h16 , ":" , h16 , ":" , ipv4_in_v6 ;
+
+comp_k0 = "::" , [ post_le_7 ] ;
+comp_k1 = h16 , "::" , [ post_le_6 ] ;
+comp_k2 = pre_2 , "::" , [ post_le_5 ] ;
+comp_k3 = pre_3 , "::" , [ post_le_4 ] ;
+comp_k4 = pre_4 , "::" , [ post_le_3 ] ;
+comp_k5 = pre_5 , "::" , [ post_le_2 ] ;
+comp_k6 = pre_6 , "::" , [ post_le_1 ] ;
+comp_k7 = pre_7 , "::" ;
+
+pre_2 = h16 , ":" , h16 ;
+pre_3 = pre_2 , ":" , h16 ;
+pre_4 = pre_3 , ":" , h16 ;
+pre_5 = pre_4 , ":" , h16 ;
+pre_6 = pre_5 , ":" , h16 ;
+pre_7 = pre_6 , ":" , h16 ;
+
+post_le_1 = post_1 ;
+post_le_2 = post_2 | post_1 ;
+post_le_3 = post_3 | post_2 | post_1 ;
+post_le_4 = post_4 | post_3 | post_2 | post_1 ;
+post_le_5 = post_5 | post_4 | post_3 | post_2 | post_1 ;
+post_le_6 = post_6 | post_5 | post_4 | post_3 | post_2 | post_1 ;
+post_le_7 = post_7 | post_6 | post_5 | post_4 | post_3 | post_2 | post_1 ;
+
+post_1 = h16 ;
+post_2 = h16 , ":" , h16
+       | ipv4_in_v6 ;
+post_3 = h16 , ":" , h16 , ":" , h16
+       | h16 , ":" , ipv4_in_v6 ;
+post_4 = h16 , ":" , h16 , ":" , h16 , ":" , h16
+       | h16 , ":" , h16 , ":" , ipv4_in_v6 ;
+post_5 = h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" , h16
+       | h16 , ":" , h16 , ":" , h16 , ":" , ipv4_in_v6 ;
+post_6 = h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" , h16
+       | h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" , ipv4_in_v6 ;
+post_7 = h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" , h16
+       | h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" , ipv4_in_v6 ;
+
+h16       = hex_digit , [ hex_digit , [ hex_digit , [ hex_digit ] ] ] ;
+hex_digit = digit | "a" ... "f" | "A" ... "F" ;
+
+ipv4_in_v6 = octet , "." , octet , "." , octet , "." , octet ;

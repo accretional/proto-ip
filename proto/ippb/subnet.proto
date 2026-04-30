@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package ip;
+
+option go_package = "github.com/accretional/proto-ip/proto/ippb;ippb";
+
+// Subnet describes the network portion of a CIDR block. It is
+// intentionally permissive: callers may supply a numeric prefix length
+// (the canonical form), a textual netmask, or the full CIDR text
+// fragment ("/24") and let downstream code reconcile.
+message Subnet {
+  oneof format {
+    // "/N" or "N" prefix length string.
+    string text = 1;
+    // Prefix length in bits. 0..32 for v4, 0..128 for v6.
+    uint32 prefix_length = 2;
+    // Dotted-decimal netmask for IPv4 ("255.255.255.0").
+    string netmask = 3;
+  }
+}

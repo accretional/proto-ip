@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package ip;
+
+option go_package = "github.com/accretional/proto-ip/proto/ippb;ippb";
+
+import "proto/ippb/ip.proto";
+import "proto/ippb/cidr.proto";
+
+// InterfaceClass categorizes a local network interface. The set is
+// intentionally small; impl-specific names live in Interface.name.
+enum InterfaceClass {
+  INTERFACE_CLASS_UNKNOWN = 0;
+  INTERFACE_CLASS_LOOPBACK = 1;
+  // Wired ethernet (eth0, en0 on Darwin, ...).
+  INTERFACE_CLASS_ETHERNET = 2;
+  // Wi-Fi (wlan0, en1 on Darwin, ...).
+  INTERFACE_CLASS_WIRELESS = 3;
+  // Tunnels: utun*, tun*, tap*, wireguard, etc.
+  INTERFACE_CLASS_TUNNEL = 4;
+  // Bridges, VLANs, virtual switches.
+  INTERFACE_CLASS_VIRTUAL = 5;
+}
+
+// Interface is a single local network interface and its addresses.
+message Interface {
+  InterfaceClass class = 1;
+  string name = 2;
+  // MAC address, network order. Empty for loopback / virtual.
+  bytes hardware_address = 3;
+  // All addresses bound to this interface, paired with their subnet.
+  repeated CIDR addresses = 4;
+  // True when the kernel reports the link as up.
+  bool up = 5;
+}
+
+// LookupFilter narrows the result set on the server side. Empty filter
+// returns everything.
+message LookupFilter {
+  // If set, only interfaces whose class matches will be returned.
+  repeated InterfaceClass classes = 1;
+  // If set, only interfaces whose name matches will be returned.
+  repeated string names = 2;
+  // If true, omit loopback, link-local, and private-range addresses.
+  bool only_routable = 3;
+}
+
+// LocalLookup serves IP information from the host kernel
+// (procfs on Linux, route/getifaddrs/sysctl on Darwin).
+// Implementations MUST NOT cache results across calls — each request
+// reads live state.
+service LocalLookup {
+  // ListInterfaces streams every interface + its bound addresses.
+  rpc ListInterfaces(LookupFilter) returns (stream Interface);
+  // ListIPs streams every locally-bound IP address (across all
+  // interfaces). Convenience wrapper around ListInterfaces.
+  rpc ListIPs(LookupFilter) returns (stream IP);
+}

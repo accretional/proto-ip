@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package ip;
+
+option go_package = "github.com/accretional/proto-ip/proto/ippb;ippb";
+
+import "proto/ippb/ip.proto";
+import "proto/ippb/subnet.proto";
+
+// CIDR pairs an IP with a Subnet. The IP's family determines the
+// valid prefix-length range on Subnet (0..32 for v4, 0..128 for v6).
+message CIDR {
+  IP ip = 1;
+  Subnet subnet = 2;
+}

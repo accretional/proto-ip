@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package ip;
+
+option go_package = "github.com/accretional/proto-ip/proto/ippb;ippb";
+
+// IPv4Address carries the formatted client-facing representation of a
+// single IPv4 address. The on-wire canonical encoding sits on the
+// parent IP message (see ip.proto) — this oneof preserves the original
+// textual or numeric form the client supplied, so infrastructure can
+// distinguish "10.0.0.1" from "0xA000001".
+message IPv4Address {
+  oneof format {
+    // Dotted-decimal "a.b.c.d", possibly with leading zeros.
+    string dotted_decimal = 1;
+    // Single 32-bit unsigned integer (host order).
+    uint32 num = 2;
+    // 4 bytes, network order — what /proc/net etc. produce.
+    bytes octets = 3;
+    // Mixed/legacy "0xC0.0xA8.1.1" or "1.2.131" inet_aton-style forms,
+    // preserved verbatim. Validated by the inet_aton grammar.
+    string inet_aton = 4;
+  }
+}

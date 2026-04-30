@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package ip;
+
+option go_package = "github.com/accretional/proto-ip/proto/ippb;ippb";
+
+// IPv6Address carries the formatted client-facing representation of a
+// single IPv6 address. The on-wire canonical encoding (16 bytes /
+// 128 bits) lives on the parent IP message — this oneof preserves the
+// original textual encoding the client supplied.
+message IPv6Address {
+  oneof format {
+    // Full or compressed text form (RFC 4291 / RFC 5952).
+    // Examples: "fe80::1", "2001:db8:0:0:0:0:0:1", "::ffff:192.0.2.1".
+    string text = 1;
+    // 16 bytes, network order.
+    bytes octets = 2;
+    // Optional zone identifier ("%eth0") for link-local addresses,
+    // preserved separately so wire encoding can round-trip it.
+    string zone_id = 3;
+  }
+}

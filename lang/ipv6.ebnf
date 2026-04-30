@@ -1,0 +1,101 @@
+(* IPv6 textual representation per RFC 4291 §2.2 with optional zone
+   identifier per RFC 4007.
+
+   The grammar enumerates the RFC's nine forms by indexing on K, the
+   number of h16 groups before "::". For each K (0..7), the rule
+   comp_kK fixes the prefix and bounds the suffix to (7-K)
+   h16-equivalents, where ipv4_in_v6 in post_M counts as 2
+   equivalents (the trailing 32 bits). gluon's matchAlternation picks
+   the longest matching alternative, so K is chosen automatically by
+   whichever combination consumes the whole input.
+
+   This factoring exists because gluon's matchOptional does not
+   backtrack across "match something" / "match nothing" once the
+   inner sequence partially commits. The earlier RFC-style
+   `[ *N(h16:) h16 ] :: ...` form fails on inputs like "1::8" — the
+   optional eagerly eats "1:" into the *N repetition, then can't
+   match the trailing h16 at ":", and the whole optional collapses
+   to empty (with the `1` left unconsumed), which is a longest-match
+   miss. Indexing K explicitly avoids the conflict. *)
+
+ipv6_address = ipv6_addr , [ "%" , zone_id ] ;
+
+ipv6_addr =
+    no_compress
+  | comp_k0 | comp_k1 | comp_k2 | comp_k3
+  | comp_k4 | comp_k5 | comp_k6 | comp_k7 ;
+
+(* No "::" — exactly 8 h16 groups, or 6 h16 + ipv4 trailer. *)
+no_compress =
+    h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" ,
+    h16 , ":" , h16 , ":" , h16 , ":" , h16
+  | h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" ,
+    h16 , ":" , h16 , ":" , ipv4_in_v6 ;
+
+(* K = 0..7: K h16's before "::"; suffix bounded to (7-K) h16-equiv. *)
+comp_k0 = "::" , [ post_le_7 ] ;
+comp_k1 = h16 , "::" , [ post_le_6 ] ;
+comp_k2 = pre_2 , "::" , [ post_le_5 ] ;
+comp_k3 = pre_3 , "::" , [ post_le_4 ] ;
+comp_k4 = pre_4 , "::" , [ post_le_3 ] ;
+comp_k5 = pre_5 , "::" , [ post_le_2 ] ;
+comp_k6 = pre_6 , "::" , [ post_le_1 ] ;
+comp_k7 = pre_7 , "::" ;
+
+pre_2 = h16 , ":" , h16 ;
+pre_3 = pre_2 , ":" , h16 ;
+pre_4 = pre_3 , ":" , h16 ;
+pre_5 = pre_4 , ":" , h16 ;
+pre_6 = pre_5 , ":" , h16 ;
+pre_7 = pre_6 , ":" , h16 ;
+
+(* post_le_M: 1..M h16-equivalents after "::". longest wins. *)
+post_le_1 = post_1 ;
+post_le_2 = post_2 | post_1 ;
+post_le_3 = post_3 | post_2 | post_1 ;
+post_le_4 = post_4 | post_3 | post_2 | post_1 ;
+post_le_5 = post_5 | post_4 | post_3 | post_2 | post_1 ;
+post_le_6 = post_6 | post_5 | post_4 | post_3 | post_2 | post_1 ;
+post_le_7 = post_7 | post_6 | post_5 | post_4 | post_3 | post_2 | post_1 ;
+
+(* post_M: exactly M h16-equivalents. M >= 2 has a v4 variant
+   (ipv4_in_v6 contributes the last 2 equivalents). *)
+post_1 = h16 ;
+post_2 = h16 , ":" , h16
+       | ipv4_in_v6 ;
+post_3 = h16 , ":" , h16 , ":" , h16
+       | h16 , ":" , ipv4_in_v6 ;
+post_4 = h16 , ":" , h16 , ":" , h16 , ":" , h16
+       | h16 , ":" , h16 , ":" , ipv4_in_v6 ;
+post_5 = h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" , h16
+       | h16 , ":" , h16 , ":" , h16 , ":" , ipv4_in_v6 ;
+post_6 = h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" , h16
+       | h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" , ipv4_in_v6 ;
+post_7 = h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" , h16
+       | h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" , h16 , ":" , ipv4_in_v6 ;
+
+(* h16: 1..4 hex digits. Ranges (not enumeration) are required —
+   gluon's matchTerminal applies a keyword-boundary check that
+   rejects single-char alpha terminals followed by an alpha char,
+   so "a" | "b" | ... cannot match "ab". *)
+h16 = hex_digit , [ hex_digit , [ hex_digit , [ hex_digit ] ] ] ;
+
+hex_digit = digit | "a" ... "f" | "A" ... "F" ;
+
+ipv4_in_v6 = octet , "." , octet , "." , octet , "." , octet ;
+
+octet = "25" , range_0_5
+      | "2" , range_0_4 , digit
+      | "1" , digit , digit
+      | nonzero_digit , digit
+      | digit ;
+
+range_0_5     = "0" ... "5" ;
+range_0_4     = "0" ... "4" ;
+digit         = "0" ... "9" ;
+nonzero_digit = "1" ... "9" ;
+
+(* Zone IDs per RFC 4007: implementation-defined character set.
+   Accept the practical Linux/Darwin interface name set. *)
+zone_id   = zone_char , { zone_char } ;
+zone_char = digit | "a" ... "z" | "A" ... "Z" | "_" | "." | "-" ;

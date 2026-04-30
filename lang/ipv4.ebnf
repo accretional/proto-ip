@@ -1,0 +1,21 @@
+(* IPv4 dotted-decimal canonical form per RFC 791.
+   The grammar enforces 0..255 per octet structurally (no leading
+   zeros, except the literal "0"). Validation is by parse alone:
+   if the grammar accepts the input, the address is well-formed.
+
+   Lowercase rule names mark these productions as lexical; gluon
+   does not skip whitespace inside lexical productions. *)
+
+ipv4_address = octet , "." , octet , "." , octet , "." , octet ;
+
+(* 0..255 with no leading zeros (except "0" itself). *)
+octet = "25" , range_0_5
+      | "2" , range_0_4 , digit
+      | "1" , digit , digit
+      | nonzero_digit , digit
+      | digit ;
+
+range_0_5     = "0" ... "5" ;
+range_0_4     = "0" ... "4" ;
+digit         = "0" ... "9" ;
+nonzero_digit = "1" ... "9" ;

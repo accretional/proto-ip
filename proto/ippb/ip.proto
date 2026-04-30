@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package ip;
+
+option go_package = "github.com/accretional/proto-ip/proto/ippb;ippb";
+
+import "proto/ippb/ipv4.proto";
+import "proto/ippb/ipv6.proto";
+
+// IP encodes any IPv4 or IPv6 address as a single 128-bit value split
+// into two sint64 halves. IPv4 addresses are stored as IPv4-mapped
+// IPv6 (::ffff:0:0/96) on the wire so consumers can treat both
+// uniformly. The original client-supplied form is preserved in the
+// version oneof for reversible round-tripping and so policy code can
+// branch on the intended client family.
+message IP {
+  // High 64 bits of the 128-bit address (bytes 0..7).
+  // For IPv4 (mapped), the upper 32 bits are zero and the lower 32
+  // bits are 0x0000FFFF.
+  sint64 network_prefix = 1;
+  // Low 64 bits of the 128-bit address (bytes 8..15).
+  // For IPv4 (mapped), the upper 32 bits are zero and the lower 32
+  // bits hold the v4 octets.
+  sint64 interface_identifier = 2;
+
+  // Original client-supplied formatting. Wire-level consumers SHOULD
+  // ignore this oneof and use the 128-bit value above; humans and
+  // round-tripping renderers SHOULD prefer this oneof.
+  oneof version {
+    IPv4Address v4 = 3;
+    IPv6Address v6 = 4;
+  }
+}
