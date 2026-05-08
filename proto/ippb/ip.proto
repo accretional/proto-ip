@@ -10,10 +10,12 @@ import "proto/ippb/ipv6.proto";
 // IP encodes any IPv4 or IPv6 address as a single 128-bit value split
 // into two sint64 halves. IPv4 addresses are stored as IPv4-mapped
 // IPv6 (::ffff:0:0/96) on the wire so consumers can treat both
-// uniformly. The original client-supplied form is preserved in the
+// uniformly. The original client-supplied form may be preserved in the
 // version oneof for reversible round-tripping and so policy code can
 // branch on the intended client family.
 message IP {
+  // Low-overhead way of representing lack of formatted data within this message in the versioned oneof "version"
+  message Versionless{}
   // High 64 bits of the 128-bit address (bytes 0..7).
   // For IPv4 (mapped), the upper 32 bits are zero and the lower 32
   // bits are 0x0000FFFF.
@@ -29,5 +31,6 @@ message IP {
   oneof version {
     IPv4Address v4 = 3;
     IPv6Address v6 = 4;
+    Versionless none = 5;
   }
 }
