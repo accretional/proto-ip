@@ -60,6 +60,42 @@ fi
 echo "  ✓ Got $N local IP(s)"
 
 echo ""
+echo "=== Smoke test: RDAPLookup server + client ==="
+
+RDAP_PORT=50098
+echo "  Starting rdap-server on port $RDAP_PORT..."
+bin/rdap-server -port "$RDAP_PORT" &
+RDAP_PID=$!
+
+# Give the server time to fetch IANA bootstrap.
+sleep 3
+if ! kill -0 "$RDAP_PID" 2>/dev/null; then
+    echo "  ERROR: rdap-server failed to start"
+    exit 1
+fi
+
+rdap_cleanup() {
+    echo "  Stopping rdap-server (PID $RDAP_PID)..."
+    kill "$RDAP_PID" 2>/dev/null || true
+    wait "$RDAP_PID" 2>/dev/null || true
+}
+trap rdap_cleanup EXIT
+
+echo "  RDAP lookup: 8.8.8.8 (Google DNS, IPv4)..."
+bin/rdap-client -addr "localhost:$RDAP_PORT" ip 8.8.8.8
+echo ""
+
+echo "  RDAP lookup: 2001:4860:4860::8888 (Google DNS, IPv6)..."
+bin/rdap-client -addr "localhost:$RDAP_PORT" ip 2001:4860:4860::8888
+echo ""
+
+echo "  RDAP lookup: 1.1.1.0/24 (Cloudflare, CIDR)..."
+bin/rdap-client -addr "localhost:$RDAP_PORT" cidr 1.1.1.0/24
+echo ""
+
+echo "  ✓ RDAP smoke tests passed"
+
+echo ""
 echo "=== Long fuzz pass (15s per grammar) ==="
 go test -run=NONE -fuzz=FuzzIPv4 -fuzztime=15s ./lang
 go test -run=NONE -fuzz=FuzzIPv6 -fuzztime=15s ./lang

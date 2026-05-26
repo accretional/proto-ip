@@ -1,0 +1,138 @@
+syntax = "proto3";
+
+package ip;
+
+option go_package = "github.com/accretional/proto-ip/proto/ippb;ippb";
+
+import "proto/ippb/ip.proto";
+import "proto/ippb/cidr.proto";
+
+// RDAPIPVersion is the address family reported by an RDAP server.
+// RFC 7483 defines exactly two values; UNKNOWN covers unrecognised strings.
+enum RDAPIPVersion {
+  RDAP_IP_VERSION_UNKNOWN = 0;
+  RDAP_IP_VERSION_V4 = 1;
+  RDAP_IP_VERSION_V6 = 2;
+}
+
+// RDAPRole enumerates the entity roles defined by RFC 7483 §10.2.4
+// and the IANA RDAP JSON Values registry.
+enum RDAPRole {
+  RDAP_ROLE_UNKNOWN = 0;
+  RDAP_ROLE_REGISTRANT = 1;
+  RDAP_ROLE_TECHNICAL = 2;
+  RDAP_ROLE_ADMINISTRATIVE = 3;
+  RDAP_ROLE_ABUSE = 4;
+  RDAP_ROLE_NOC = 5;
+  RDAP_ROLE_BILLING = 6;
+  RDAP_ROLE_REGISTRAR = 7;
+  RDAP_ROLE_RESELLER = 8;
+  RDAP_ROLE_SPONSOR = 9;
+  RDAP_ROLE_PROXY = 10;
+  RDAP_ROLE_NOTIFICATIONS = 11;
+  RDAP_ROLE_NOC_DEFAULT_ABUSE_CONTACT = 12;
+}
+
+// RDAPEventAction enumerates the eventAction values defined by
+// RFC 7483 §10.2.3 and the IANA RDAP JSON Values registry.
+enum RDAPEventAction {
+  RDAP_EVENT_ACTION_UNKNOWN = 0;
+  RDAP_EVENT_ACTION_REGISTRATION = 1;
+  RDAP_EVENT_ACTION_REREGISTRATION = 2;
+  RDAP_EVENT_ACTION_LAST_CHANGED = 3;
+  RDAP_EVENT_ACTION_EXPIRATION = 4;
+  RDAP_EVENT_ACTION_DELETION = 5;
+  RDAP_EVENT_ACTION_REINSTANTIATION = 6;
+  RDAP_EVENT_ACTION_TRANSFER = 7;
+  RDAP_EVENT_ACTION_LOCKED = 8;
+  RDAP_EVENT_ACTION_UNLOCKED = 9;
+  RDAP_EVENT_ACTION_LAST_UPDATE_OF_RDAP_DATABASE = 10;
+  RDAP_EVENT_ACTION_REGISTRAR_EXPIRATION = 11;
+  RDAP_EVENT_ACTION_ENUM_VALIDATION_EXPIRATION = 12;
+}
+
+// RDAPStatus enumerates the status values defined by RFC 7483 §10.2.1
+// and the IANA RDAP JSON Values registry.
+enum RDAPStatus {
+  RDAP_STATUS_UNKNOWN = 0;
+  RDAP_STATUS_ACTIVE = 1;
+  RDAP_STATUS_INACTIVE = 2;
+  RDAP_STATUS_VALIDATED = 3;
+  RDAP_STATUS_RENEW_PROHIBITED = 4;
+  RDAP_STATUS_UPDATE_PROHIBITED = 5;
+  RDAP_STATUS_TRANSFER_PROHIBITED = 6;
+  RDAP_STATUS_DELETE_PROHIBITED = 7;
+  RDAP_STATUS_PROXY = 8;
+  RDAP_STATUS_PRIVATE = 9;
+  RDAP_STATUS_REMOVED = 10;
+  RDAP_STATUS_OBSCURED = 11;
+  RDAP_STATUS_ASSOCIATED = 12;
+  RDAP_STATUS_LOCKED = 13;
+  RDAP_STATUS_PENDING_CREATE = 14;
+  RDAP_STATUS_PENDING_RENEW = 15;
+  RDAP_STATUS_PENDING_TRANSFER = 16;
+  RDAP_STATUS_PENDING_UPDATE = 17;
+  RDAP_STATUS_PENDING_DELETE = 18;
+}
+
+// RDAPEntity is a contact or organization from an RDAP response,
+// extracted from the vCard embedded in the entity object.
+message RDAPEntity {
+  string handle = 1;
+  // Full name from vCard FN property.
+  string fn = 2;
+  repeated RDAPRole roles = 3;
+  repeated string emails = 4;
+}
+
+// RDAPEvent corresponds to an RDAP eventAction / eventDate pair.
+message RDAPEvent {
+  RDAPEventAction action = 1;
+  // ISO 8601 date string as returned by the RIR.
+  string date = 2;
+}
+
+// RDAPNetwork is the core ip network object returned by an RDAP registry.
+message RDAPNetwork {
+  // RIR-assigned handle (e.g. "NET-8-8-8-0-1" from ARIN).
+  string handle = 1;
+  // Human-readable name of the network block.
+  string name = 2;
+  // Allocation type (e.g. "DIRECT ALLOCATION"). Left as string because
+  // RIRs use values beyond the IANA-registered set.
+  string type = 3;
+  // First address of the block, as returned by the RIR (text form).
+  string start_address = 4;
+  // Last address of the block.
+  string end_address = 5;
+  RDAPIPVersion ip_version = 6;
+  // ISO 3166-1 alpha-2 country code.
+  string country = 7;
+  repeated RDAPStatus status = 8;
+  repeated RDAPEntity entities = 9;
+  repeated RDAPEvent events = 10;
+  // Self / alternate link hrefs from the RDAP links array.
+  repeated string links = 11;
+  // Base URL of the RDAP server that was queried.
+  string rdap_server = 12;
+}
+
+// RDAPResponse wraps the parsed ip network registration record.
+message RDAPResponse {
+  RDAPNetwork network = 1;
+  // Full RDAP JSON response body, preserved for callers that need
+  // fields not modelled in RDAPNetwork.
+  string raw_json = 2;
+}
+
+// RDAPLookup performs RDAP registration lookups for IP addresses and
+// CIDR blocks. It uses the IANA bootstrap registry (RFC 7484) to
+// route each query to the correct Regional Internet Registry.
+service RDAPLookup {
+  // LookupIP queries the RDAP registry for a single IP address.
+  rpc LookupIP(IP) returns (RDAPResponse);
+  // LookupCIDR queries the RDAP registry for a CIDR block.
+  // The full prefix (e.g. "10.0.0.0/8") is forwarded to the RIR so
+  // the response covers the exact block, not just the containing one.
+  rpc LookupCIDR(CIDR) returns (RDAPResponse);
+}
