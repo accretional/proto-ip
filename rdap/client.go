@@ -108,6 +108,7 @@ var roleMap = map[string]pb.RDAPRole{
 	"proxy":                  pb.RDAPRole_RDAP_ROLE_PROXY,
 	"notifications":          pb.RDAPRole_RDAP_ROLE_NOTIFICATIONS,
 	"nocDefaultAbuseContact": pb.RDAPRole_RDAP_ROLE_NOC_DEFAULT_ABUSE_CONTACT,
+	"routing":                pb.RDAPRole_RDAP_ROLE_ROUTING,
 }
 
 var eventActionMap = map[string]pb.RDAPEventAction{
@@ -126,40 +127,51 @@ var eventActionMap = map[string]pb.RDAPEventAction{
 }
 
 var statusMap = map[string]pb.RDAPStatus{
-	"active":               pb.RDAPStatus_RDAP_STATUS_ACTIVE,
-	"inactive":             pb.RDAPStatus_RDAP_STATUS_INACTIVE,
-	"validated":            pb.RDAPStatus_RDAP_STATUS_VALIDATED,
-	"renew prohibited":     pb.RDAPStatus_RDAP_STATUS_RENEW_PROHIBITED,
-	"update prohibited":    pb.RDAPStatus_RDAP_STATUS_UPDATE_PROHIBITED,
-	"transfer prohibited":  pb.RDAPStatus_RDAP_STATUS_TRANSFER_PROHIBITED,
-	"delete prohibited":    pb.RDAPStatus_RDAP_STATUS_DELETE_PROHIBITED,
-	"proxy":                pb.RDAPStatus_RDAP_STATUS_PROXY,
-	"private":              pb.RDAPStatus_RDAP_STATUS_PRIVATE,
-	"removed":              pb.RDAPStatus_RDAP_STATUS_REMOVED,
-	"obscured":             pb.RDAPStatus_RDAP_STATUS_OBSCURED,
-	"associated":           pb.RDAPStatus_RDAP_STATUS_ASSOCIATED,
-	"locked":               pb.RDAPStatus_RDAP_STATUS_LOCKED,
-	"pending create":       pb.RDAPStatus_RDAP_STATUS_PENDING_CREATE,
-	"pending renew":        pb.RDAPStatus_RDAP_STATUS_PENDING_RENEW,
-	"pending transfer":     pb.RDAPStatus_RDAP_STATUS_PENDING_TRANSFER,
-	"pending update":       pb.RDAPStatus_RDAP_STATUS_PENDING_UPDATE,
-	"pending delete":       pb.RDAPStatus_RDAP_STATUS_PENDING_DELETE,
+	"active":              pb.RDAPStatus_RDAP_STATUS_ACTIVE,
+	"inactive":            pb.RDAPStatus_RDAP_STATUS_INACTIVE,
+	"validated":           pb.RDAPStatus_RDAP_STATUS_VALIDATED,
+	"renew prohibited":    pb.RDAPStatus_RDAP_STATUS_RENEW_PROHIBITED,
+	"update prohibited":   pb.RDAPStatus_RDAP_STATUS_UPDATE_PROHIBITED,
+	"transfer prohibited": pb.RDAPStatus_RDAP_STATUS_TRANSFER_PROHIBITED,
+	"delete prohibited":   pb.RDAPStatus_RDAP_STATUS_DELETE_PROHIBITED,
+	"proxy":               pb.RDAPStatus_RDAP_STATUS_PROXY,
+	"private":             pb.RDAPStatus_RDAP_STATUS_PRIVATE,
+	"removed":             pb.RDAPStatus_RDAP_STATUS_REMOVED,
+	"obscured":            pb.RDAPStatus_RDAP_STATUS_OBSCURED,
+	"associated":          pb.RDAPStatus_RDAP_STATUS_ASSOCIATED,
+	"locked":              pb.RDAPStatus_RDAP_STATUS_LOCKED,
+	"pending create":      pb.RDAPStatus_RDAP_STATUS_PENDING_CREATE,
+	"pending renew":       pb.RDAPStatus_RDAP_STATUS_PENDING_RENEW,
+	"pending transfer":    pb.RDAPStatus_RDAP_STATUS_PENDING_TRANSFER,
+	"pending update":      pb.RDAPStatus_RDAP_STATUS_PENDING_UPDATE,
+	"pending delete":      pb.RDAPStatus_RDAP_STATUS_PENDING_DELETE,
+}
+
+var entityKindMap = map[string]pb.RDAPEntityKind{
+	"individual":  pb.RDAPEntityKind_RDAP_ENTITY_KIND_INDIVIDUAL,
+	"group":       pb.RDAPEntityKind_RDAP_ENTITY_KIND_GROUP,
+	"org":         pb.RDAPEntityKind_RDAP_ENTITY_KIND_ORG,
+	"location":    pb.RDAPEntityKind_RDAP_ENTITY_KIND_LOCATION,
+	"application": pb.RDAPEntityKind_RDAP_ENTITY_KIND_APPLICATION,
 }
 
 // --- JSON parsing ---
 
 type rdapJSON struct {
-	Handle       string       `json:"handle"`
-	Name         string       `json:"name"`
-	Type         string       `json:"type"`
-	StartAddress string       `json:"startAddress"`
-	EndAddress   string       `json:"endAddress"`
-	IPVersion    string       `json:"ipVersion"`
-	Country      string       `json:"country"`
-	Status       []string     `json:"status"`
-	Entities     []entityJSON `json:"entities"`
-	Events       []eventJSON  `json:"events"`
-	Links        []linkJSON   `json:"links"`
+	Handle          string       `json:"handle"`
+	Name            string       `json:"name"`
+	Type            string       `json:"type"`
+	StartAddress    string       `json:"startAddress"`
+	EndAddress      string       `json:"endAddress"`
+	IPVersion       string       `json:"ipVersion"`
+	Country         string       `json:"country"`
+	Status          []string     `json:"status"`
+	Entities        []entityJSON `json:"entities"`
+	Events          []eventJSON  `json:"events"`
+	Links           []linkJSON   `json:"links"`
+	ParentHandle    string       `json:"parentHandle"`
+	CIDR0CIDRs      []cidr0JSON  `json:"cidr0_cidrs"`
+	RDAPConformance []string     `json:"rdapConformance"`
 }
 
 type entityJSON struct {
@@ -177,6 +189,12 @@ type linkJSON struct {
 	Href string `json:"href"`
 }
 
+type cidr0JSON struct {
+	V4Prefix string `json:"v4prefix"`
+	V6Prefix string `json:"v6prefix"`
+	Length   uint32 `json:"length"`
+}
+
 func parseNetwork(body []byte, rdapServer string) (*pb.RDAPNetwork, error) {
 	var r rdapJSON
 	if err := json.Unmarshal(body, &r); err != nil {
@@ -185,30 +203,34 @@ func parseNetwork(body []byte, rdapServer string) (*pb.RDAPNetwork, error) {
 
 	entities := make([]*pb.RDAPEntity, 0, len(r.Entities))
 	for _, e := range r.Entities {
-		fn, emails := parseVCard(e.VcardArray)
+		vc := parseVCard(e.VcardArray)
 		roles := make([]pb.RDAPRole, 0, len(e.Roles))
 		for _, rs := range e.Roles {
-			roles = append(roles, roleMap[rs]) // zero value = UNKNOWN for unrecognised
+			roles = append(roles, roleMap[rs])
 		}
 		entities = append(entities, &pb.RDAPEntity{
-			Handle: e.Handle,
-			Fn:     fn,
-			Roles:  roles,
-			Emails: emails,
+			Handle:  e.Handle,
+			Fn:      vc.FN,
+			Roles:   roles,
+			Emails:  vc.Emails,
+			Kind:    entityKindMap[vc.Kind],
+			Org:     vc.Org,
+			Address: vc.Address,
+			Phone:   vc.Phone,
 		})
 	}
 
 	events := make([]*pb.RDAPEvent, 0, len(r.Events))
 	for _, ev := range r.Events {
 		events = append(events, &pb.RDAPEvent{
-			Action: eventActionMap[ev.EventAction], // zero value = UNKNOWN
+			Action: eventActionMap[ev.EventAction],
 			Date:   ev.EventDate,
 		})
 	}
 
 	statuses := make([]pb.RDAPStatus, 0, len(r.Status))
 	for _, s := range r.Status {
-		statuses = append(statuses, statusMap[s]) // zero value = UNKNOWN
+		statuses = append(statuses, statusMap[s])
 	}
 
 	links := make([]string, 0, len(r.Links))
@@ -218,37 +240,69 @@ func parseNetwork(body []byte, rdapServer string) (*pb.RDAPNetwork, error) {
 		}
 	}
 
+	cidrBlocks := make([]*pb.RDAPCIDRBlock, 0, len(r.CIDR0CIDRs))
+	for _, c := range r.CIDR0CIDRs {
+		prefix := c.V4Prefix
+		if prefix == "" {
+			prefix = c.V6Prefix
+		}
+		if prefix != "" {
+			cidrBlocks = append(cidrBlocks, &pb.RDAPCIDRBlock{
+				Prefix: prefix,
+				Length: c.Length,
+			})
+		}
+	}
+
 	return &pb.RDAPNetwork{
-		Handle:       r.Handle,
-		Name:         r.Name,
-		Type:         r.Type,
-		StartAddress: r.StartAddress,
-		EndAddress:   r.EndAddress,
-		IpVersion:    ipVersionMap[r.IPVersion], // zero value = UNKNOWN
-		Country:      r.Country,
-		Status:       statuses,
-		Entities:     entities,
-		Events:       events,
-		Links:        links,
-		RdapServer:   rdapServer,
+		Handle:          r.Handle,
+		Name:            r.Name,
+		Type:            r.Type,
+		StartAddress:    r.StartAddress,
+		EndAddress:      r.EndAddress,
+		IpVersion:       ipVersionMap[r.IPVersion],
+		Country:         r.Country,
+		Status:          statuses,
+		Entities:        entities,
+		Events:          events,
+		Links:           links,
+		RdapServer:      rdapServer,
+		ParentHandle:    r.ParentHandle,
+		CidrBlocks:      cidrBlocks,
+		RdapConformance: r.RDAPConformance,
 	}, nil
 }
 
-// parseVCard extracts the FN (full name) and email addresses from an
-// RDAP vCard. The vcardArray format per RFC 6350 / RFC 7483 is:
+// vcardResult holds the fields extracted from a vCard.
+type vcardResult struct {
+	FN      string
+	Kind    string
+	Org     string
+	Address string
+	Phone   string
+	Emails  []string
+}
+
+// parseVCard extracts structured fields from an RDAP vCard.
+// The vcardArray format per RFC 6350 / RFC 7483 is:
 //
 //	["vcard", [["version",{},"text","4.0"], ["fn",{},"text","Name"], ...]]
-func parseVCard(raw json.RawMessage) (fn string, emails []string) {
+//
+// Each entry is [propName, params, type, value]. The params object (index 1)
+// may carry a "label" key for adr entries.
+func parseVCard(raw json.RawMessage) vcardResult {
+	var res vcardResult
 	if len(raw) == 0 {
-		return
+		return res
 	}
+	// Top level: ["vcard", [...entries...]]
 	var top []json.RawMessage
 	if err := json.Unmarshal(raw, &top); err != nil || len(top) < 2 {
-		return
+		return res
 	}
 	var entries []json.RawMessage
 	if err := json.Unmarshal(top[1], &entries); err != nil {
-		return
+		return res
 	}
 	for _, entry := range entries {
 		var fields []json.RawMessage
@@ -261,15 +315,32 @@ func parseVCard(raw json.RawMessage) (fn string, emails []string) {
 		}
 		switch prop {
 		case "fn":
-			json.Unmarshal(fields[3], &fn) //nolint:errcheck
+			json.Unmarshal(fields[3], &res.FN) //nolint:errcheck
+		case "kind":
+			json.Unmarshal(fields[3], &res.Kind) //nolint:errcheck
+		case "org":
+			json.Unmarshal(fields[3], &res.Org) //nolint:errcheck
 		case "email":
 			var email string
 			if err := json.Unmarshal(fields[3], &email); err == nil && email != "" {
-				emails = append(emails, email)
+				res.Emails = append(res.Emails, email)
+			}
+		case "tel":
+			if res.Phone == "" {
+				json.Unmarshal(fields[3], &res.Phone) //nolint:errcheck
+			}
+		case "adr":
+			// Prefer the label parameter (formatted address string) over the
+			// structured 7-element array, which ARIN leaves entirely empty.
+			var params struct {
+				Label string `json:"label"`
+			}
+			if err := json.Unmarshal(fields[1], &params); err == nil && params.Label != "" {
+				res.Address = params.Label
 			}
 		}
 	}
-	return
+	return res
 }
 
 // --- helpers ---

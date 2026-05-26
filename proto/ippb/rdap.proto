@@ -31,6 +31,8 @@ enum RDAPRole {
   RDAP_ROLE_PROXY = 10;
   RDAP_ROLE_NOTIFICATIONS = 11;
   RDAP_ROLE_NOC_DEFAULT_ABUSE_CONTACT = 12;
+  // routing is not in RFC 7483 but is used in practice by ARIN.
+  RDAP_ROLE_ROUTING = 13;
 }
 
 // RDAPEventAction enumerates the eventAction values defined by
@@ -75,6 +77,27 @@ enum RDAPStatus {
   RDAP_STATUS_PENDING_DELETE = 18;
 }
 
+// RDAPEntityKind reflects the vCard KIND property (RFC 6350 §6.1.4).
+// It distinguishes the LIR/ISP organisation from individual contact persons.
+enum RDAPEntityKind {
+  RDAP_ENTITY_KIND_UNKNOWN = 0;
+  RDAP_ENTITY_KIND_INDIVIDUAL = 1;
+  RDAP_ENTITY_KIND_GROUP = 2;
+  RDAP_ENTITY_KIND_ORG = 3;
+  RDAP_ENTITY_KIND_LOCATION = 4;
+  RDAP_ENTITY_KIND_APPLICATION = 5;
+}
+
+// RDAPCIDRBlock is one entry from the cidr0 NRO RDAP extension.
+// All five RIRs implement cidr0; it gives the canonical CIDR representation
+// of a network block without requiring callers to derive CIDRs from the
+// start/end address pair.
+message RDAPCIDRBlock {
+  // Prefix address, e.g. "192.0.2.0" or "2001:db8::".
+  string prefix = 1;
+  uint32 length = 2;
+}
+
 // RDAPEntity is a contact or organization from an RDAP response,
 // extracted from the vCard embedded in the entity object.
 message RDAPEntity {
@@ -83,6 +106,15 @@ message RDAPEntity {
   string fn = 2;
   repeated RDAPRole roles = 3;
   repeated string emails = 4;
+  // vCard KIND: "org" identifies the LIR/ISP; "individual"/"group" are
+  // contact persons or teams.
+  RDAPEntityKind kind = 5;
+  // vCard ORG property (organization name; may differ from fn for contacts).
+  string org = 6;
+  // Postal address from vCard ADR label parameter, as a formatted string.
+  string address = 7;
+  // First phone number from vCard TEL property.
+  string phone = 8;
 }
 
 // RDAPEvent corresponds to an RDAP eventAction / eventDate pair.
@@ -115,6 +147,15 @@ message RDAPNetwork {
   repeated string links = 11;
   // Base URL of the RDAP server that was queried.
   string rdap_server = 12;
+  // Handle of the parent allocation block (e.g. the RIR's allocation to
+  // the LIR). Populated from the RDAP parentHandle field.
+  string parent_handle = 13;
+  // Canonical CIDR blocks from the cidr0 NRO extension. Present for all
+  // five RIRs. Preferred over deriving CIDRs from start/end addresses.
+  repeated RDAPCIDRBlock cidr_blocks = 14;
+  // RDAP conformance extensions the server declared (rdapConformance).
+  // Useful for knowing which optional fields to expect.
+  repeated string rdap_conformance = 15;
 }
 
 // RDAPResponse wraps the parsed ip network registration record.

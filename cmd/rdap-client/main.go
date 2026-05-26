@@ -66,36 +66,51 @@ func main() {
 
 func printResponse(resp *pb.RDAPResponse) {
 	n := resp.GetNetwork()
-	fmt.Printf("handle:       %s\n", n.GetHandle())
-	fmt.Printf("name:         %s\n", n.GetName())
-	fmt.Printf("type:         %s\n", n.GetType())
-	fmt.Printf("range:        %s – %s\n", n.GetStartAddress(), n.GetEndAddress())
-	fmt.Printf("ip_version:   %s\n", shortEnum(n.GetIpVersion().String(), "RDAP_IP_VERSION_"))
-	fmt.Printf("country:      %s\n", n.GetCountry())
+	fmt.Printf("handle:          %s\n", n.GetHandle())
+	fmt.Printf("name:            %s\n", n.GetName())
+	fmt.Printf("type:            %s\n", n.GetType())
+	fmt.Printf("range:           %s – %s\n", n.GetStartAddress(), n.GetEndAddress())
+	for _, cb := range n.GetCidrBlocks() {
+		fmt.Printf("cidr_block:      %s/%d\n", cb.GetPrefix(), cb.GetLength())
+	}
+	fmt.Printf("ip_version:      %s\n", shortEnum(n.GetIpVersion().String(), "RDAP_IP_VERSION_"))
+	fmt.Printf("country:         %s\n", n.GetCountry())
 	statuses := make([]string, len(n.GetStatus()))
 	for i, s := range n.GetStatus() {
 		statuses[i] = shortEnum(s.String(), "RDAP_STATUS_")
 	}
-	fmt.Printf("status:       %s\n", strings.Join(statuses, ", "))
-	fmt.Printf("rdap_server:  %s\n", n.GetRdapServer())
+	fmt.Printf("status:          %s\n", strings.Join(statuses, ", "))
+	fmt.Printf("parent_handle:   %s\n", n.GetParentHandle())
+	fmt.Printf("rdap_server:     %s\n", n.GetRdapServer())
+	fmt.Printf("conformance:     %s\n", strings.Join(n.GetRdapConformance(), ", "))
 	for _, e := range n.GetEntities() {
 		roles := make([]string, len(e.GetRoles()))
 		for i, r := range e.GetRoles() {
 			roles[i] = shortEnum(r.String(), "RDAP_ROLE_")
 		}
-		fmt.Printf("entity:       handle=%s fn=%q roles=%s emails=%s\n",
-			e.GetHandle(), e.GetFn(), strings.Join(roles, ","),
-			strings.Join(e.GetEmails(), ","))
+		kind := shortEnum(e.GetKind().String(), "RDAP_ENTITY_KIND_")
+		fmt.Printf("entity:          handle=%s kind=%s fn=%q org=%q roles=%s\n",
+			e.GetHandle(), kind, e.GetFn(), e.GetOrg(), strings.Join(roles, ","))
+		if addr := e.GetAddress(); addr != "" {
+			fmt.Printf("  address:       %s\n", strings.ReplaceAll(addr, "\n", " | "))
+		}
+		if phone := e.GetPhone(); phone != "" {
+			fmt.Printf("  phone:         %s\n", phone)
+		}
+		if emails := e.GetEmails(); len(emails) > 0 {
+			fmt.Printf("  emails:        %s\n", strings.Join(emails, ", "))
+		}
 	}
 	for _, ev := range n.GetEvents() {
-		fmt.Printf("event:        %s @ %s\n",
+		fmt.Printf("event:           %s @ %s\n",
 			shortEnum(ev.GetAction().String(), "RDAP_EVENT_ACTION_"), ev.GetDate())
 	}
 }
 
-// shortEnum strips the generated enum prefix for human-readable output.
+// shortEnum strips the generated enum prefix and lowercases the result
+// to match the original RDAP JSON value form (e.g. "active", "v4").
 func shortEnum(s, prefix string) string {
-	return strings.TrimPrefix(s, prefix)
+	return strings.ToLower(strings.TrimPrefix(s, prefix))
 }
 
 func parseIP(s string) *pb.IP {

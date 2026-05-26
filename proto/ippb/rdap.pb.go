@@ -90,6 +90,8 @@ const (
 	RDAPRole_RDAP_ROLE_PROXY                     RDAPRole = 10
 	RDAPRole_RDAP_ROLE_NOTIFICATIONS             RDAPRole = 11
 	RDAPRole_RDAP_ROLE_NOC_DEFAULT_ABUSE_CONTACT RDAPRole = 12
+	// routing is not in RFC 7483 but is used in practice by ARIN.
+	RDAPRole_RDAP_ROLE_ROUTING RDAPRole = 13
 )
 
 // Enum value maps for RDAPRole.
@@ -108,6 +110,7 @@ var (
 		10: "RDAP_ROLE_PROXY",
 		11: "RDAP_ROLE_NOTIFICATIONS",
 		12: "RDAP_ROLE_NOC_DEFAULT_ABUSE_CONTACT",
+		13: "RDAP_ROLE_ROUTING",
 	}
 	RDAPRole_value = map[string]int32{
 		"RDAP_ROLE_UNKNOWN":                   0,
@@ -123,6 +126,7 @@ var (
 		"RDAP_ROLE_PROXY":                     10,
 		"RDAP_ROLE_NOTIFICATIONS":             11,
 		"RDAP_ROLE_NOC_DEFAULT_ABUSE_CONTACT": 12,
+		"RDAP_ROLE_ROUTING":                   13,
 	}
 )
 
@@ -333,22 +337,148 @@ func (RDAPStatus) EnumDescriptor() ([]byte, []int) {
 	return file_proto_ippb_rdap_proto_rawDescGZIP(), []int{3}
 }
 
+// RDAPEntityKind reflects the vCard KIND property (RFC 6350 §6.1.4).
+// It distinguishes the LIR/ISP organisation from individual contact persons.
+type RDAPEntityKind int32
+
+const (
+	RDAPEntityKind_RDAP_ENTITY_KIND_UNKNOWN     RDAPEntityKind = 0
+	RDAPEntityKind_RDAP_ENTITY_KIND_INDIVIDUAL  RDAPEntityKind = 1
+	RDAPEntityKind_RDAP_ENTITY_KIND_GROUP       RDAPEntityKind = 2
+	RDAPEntityKind_RDAP_ENTITY_KIND_ORG         RDAPEntityKind = 3
+	RDAPEntityKind_RDAP_ENTITY_KIND_LOCATION    RDAPEntityKind = 4
+	RDAPEntityKind_RDAP_ENTITY_KIND_APPLICATION RDAPEntityKind = 5
+)
+
+// Enum value maps for RDAPEntityKind.
+var (
+	RDAPEntityKind_name = map[int32]string{
+		0: "RDAP_ENTITY_KIND_UNKNOWN",
+		1: "RDAP_ENTITY_KIND_INDIVIDUAL",
+		2: "RDAP_ENTITY_KIND_GROUP",
+		3: "RDAP_ENTITY_KIND_ORG",
+		4: "RDAP_ENTITY_KIND_LOCATION",
+		5: "RDAP_ENTITY_KIND_APPLICATION",
+	}
+	RDAPEntityKind_value = map[string]int32{
+		"RDAP_ENTITY_KIND_UNKNOWN":     0,
+		"RDAP_ENTITY_KIND_INDIVIDUAL":  1,
+		"RDAP_ENTITY_KIND_GROUP":       2,
+		"RDAP_ENTITY_KIND_ORG":         3,
+		"RDAP_ENTITY_KIND_LOCATION":    4,
+		"RDAP_ENTITY_KIND_APPLICATION": 5,
+	}
+)
+
+func (x RDAPEntityKind) Enum() *RDAPEntityKind {
+	p := new(RDAPEntityKind)
+	*p = x
+	return p
+}
+
+func (x RDAPEntityKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RDAPEntityKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_ippb_rdap_proto_enumTypes[4].Descriptor()
+}
+
+func (RDAPEntityKind) Type() protoreflect.EnumType {
+	return &file_proto_ippb_rdap_proto_enumTypes[4]
+}
+
+func (x RDAPEntityKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RDAPEntityKind.Descriptor instead.
+func (RDAPEntityKind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_ippb_rdap_proto_rawDescGZIP(), []int{4}
+}
+
+// RDAPCIDRBlock is one entry from the cidr0 NRO RDAP extension.
+// All five RIRs implement cidr0; it gives the canonical CIDR representation
+// of a network block without requiring callers to derive CIDRs from the
+// start/end address pair.
+type RDAPCIDRBlock struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Prefix address, e.g. "192.0.2.0" or "2001:db8::".
+	Prefix        string `protobuf:"bytes,1,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	Length        uint32 `protobuf:"varint,2,opt,name=length,proto3" json:"length,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RDAPCIDRBlock) Reset() {
+	*x = RDAPCIDRBlock{}
+	mi := &file_proto_ippb_rdap_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RDAPCIDRBlock) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RDAPCIDRBlock) ProtoMessage() {}
+
+func (x *RDAPCIDRBlock) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ippb_rdap_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RDAPCIDRBlock.ProtoReflect.Descriptor instead.
+func (*RDAPCIDRBlock) Descriptor() ([]byte, []int) {
+	return file_proto_ippb_rdap_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *RDAPCIDRBlock) GetPrefix() string {
+	if x != nil {
+		return x.Prefix
+	}
+	return ""
+}
+
+func (x *RDAPCIDRBlock) GetLength() uint32 {
+	if x != nil {
+		return x.Length
+	}
+	return 0
+}
+
 // RDAPEntity is a contact or organization from an RDAP response,
 // extracted from the vCard embedded in the entity object.
 type RDAPEntity struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Handle string                 `protobuf:"bytes,1,opt,name=handle,proto3" json:"handle,omitempty"`
 	// Full name from vCard FN property.
-	Fn            string     `protobuf:"bytes,2,opt,name=fn,proto3" json:"fn,omitempty"`
-	Roles         []RDAPRole `protobuf:"varint,3,rep,packed,name=roles,proto3,enum=ip.RDAPRole" json:"roles,omitempty"`
-	Emails        []string   `protobuf:"bytes,4,rep,name=emails,proto3" json:"emails,omitempty"`
+	Fn     string     `protobuf:"bytes,2,opt,name=fn,proto3" json:"fn,omitempty"`
+	Roles  []RDAPRole `protobuf:"varint,3,rep,packed,name=roles,proto3,enum=ip.RDAPRole" json:"roles,omitempty"`
+	Emails []string   `protobuf:"bytes,4,rep,name=emails,proto3" json:"emails,omitempty"`
+	// vCard KIND: "org" identifies the LIR/ISP; "individual"/"group" are
+	// contact persons or teams.
+	Kind RDAPEntityKind `protobuf:"varint,5,opt,name=kind,proto3,enum=ip.RDAPEntityKind" json:"kind,omitempty"`
+	// vCard ORG property (organization name; may differ from fn for contacts).
+	Org string `protobuf:"bytes,6,opt,name=org,proto3" json:"org,omitempty"`
+	// Postal address from vCard ADR label parameter, as a formatted string.
+	Address string `protobuf:"bytes,7,opt,name=address,proto3" json:"address,omitempty"`
+	// First phone number from vCard TEL property.
+	Phone         string `protobuf:"bytes,8,opt,name=phone,proto3" json:"phone,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RDAPEntity) Reset() {
 	*x = RDAPEntity{}
-	mi := &file_proto_ippb_rdap_proto_msgTypes[0]
+	mi := &file_proto_ippb_rdap_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -360,7 +490,7 @@ func (x *RDAPEntity) String() string {
 func (*RDAPEntity) ProtoMessage() {}
 
 func (x *RDAPEntity) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_ippb_rdap_proto_msgTypes[0]
+	mi := &file_proto_ippb_rdap_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -373,7 +503,7 @@ func (x *RDAPEntity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RDAPEntity.ProtoReflect.Descriptor instead.
 func (*RDAPEntity) Descriptor() ([]byte, []int) {
-	return file_proto_ippb_rdap_proto_rawDescGZIP(), []int{0}
+	return file_proto_ippb_rdap_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *RDAPEntity) GetHandle() string {
@@ -404,6 +534,34 @@ func (x *RDAPEntity) GetEmails() []string {
 	return nil
 }
 
+func (x *RDAPEntity) GetKind() RDAPEntityKind {
+	if x != nil {
+		return x.Kind
+	}
+	return RDAPEntityKind_RDAP_ENTITY_KIND_UNKNOWN
+}
+
+func (x *RDAPEntity) GetOrg() string {
+	if x != nil {
+		return x.Org
+	}
+	return ""
+}
+
+func (x *RDAPEntity) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *RDAPEntity) GetPhone() string {
+	if x != nil {
+		return x.Phone
+	}
+	return ""
+}
+
 // RDAPEvent corresponds to an RDAP eventAction / eventDate pair.
 type RDAPEvent struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
@@ -416,7 +574,7 @@ type RDAPEvent struct {
 
 func (x *RDAPEvent) Reset() {
 	*x = RDAPEvent{}
-	mi := &file_proto_ippb_rdap_proto_msgTypes[1]
+	mi := &file_proto_ippb_rdap_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -428,7 +586,7 @@ func (x *RDAPEvent) String() string {
 func (*RDAPEvent) ProtoMessage() {}
 
 func (x *RDAPEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_ippb_rdap_proto_msgTypes[1]
+	mi := &file_proto_ippb_rdap_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -441,7 +599,7 @@ func (x *RDAPEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RDAPEvent.ProtoReflect.Descriptor instead.
 func (*RDAPEvent) Descriptor() ([]byte, []int) {
-	return file_proto_ippb_rdap_proto_rawDescGZIP(), []int{1}
+	return file_proto_ippb_rdap_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *RDAPEvent) GetAction() RDAPEventAction {
@@ -481,14 +639,23 @@ type RDAPNetwork struct {
 	// Self / alternate link hrefs from the RDAP links array.
 	Links []string `protobuf:"bytes,11,rep,name=links,proto3" json:"links,omitempty"`
 	// Base URL of the RDAP server that was queried.
-	RdapServer    string `protobuf:"bytes,12,opt,name=rdap_server,json=rdapServer,proto3" json:"rdap_server,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	RdapServer string `protobuf:"bytes,12,opt,name=rdap_server,json=rdapServer,proto3" json:"rdap_server,omitempty"`
+	// Handle of the parent allocation block (e.g. the RIR's allocation to
+	// the LIR). Populated from the RDAP parentHandle field.
+	ParentHandle string `protobuf:"bytes,13,opt,name=parent_handle,json=parentHandle,proto3" json:"parent_handle,omitempty"`
+	// Canonical CIDR blocks from the cidr0 NRO extension. Present for all
+	// five RIRs. Preferred over deriving CIDRs from start/end addresses.
+	CidrBlocks []*RDAPCIDRBlock `protobuf:"bytes,14,rep,name=cidr_blocks,json=cidrBlocks,proto3" json:"cidr_blocks,omitempty"`
+	// RDAP conformance extensions the server declared (rdapConformance).
+	// Useful for knowing which optional fields to expect.
+	RdapConformance []string `protobuf:"bytes,15,rep,name=rdap_conformance,json=rdapConformance,proto3" json:"rdap_conformance,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *RDAPNetwork) Reset() {
 	*x = RDAPNetwork{}
-	mi := &file_proto_ippb_rdap_proto_msgTypes[2]
+	mi := &file_proto_ippb_rdap_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -500,7 +667,7 @@ func (x *RDAPNetwork) String() string {
 func (*RDAPNetwork) ProtoMessage() {}
 
 func (x *RDAPNetwork) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_ippb_rdap_proto_msgTypes[2]
+	mi := &file_proto_ippb_rdap_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -513,7 +680,7 @@ func (x *RDAPNetwork) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RDAPNetwork.ProtoReflect.Descriptor instead.
 func (*RDAPNetwork) Descriptor() ([]byte, []int) {
-	return file_proto_ippb_rdap_proto_rawDescGZIP(), []int{2}
+	return file_proto_ippb_rdap_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *RDAPNetwork) GetHandle() string {
@@ -600,6 +767,27 @@ func (x *RDAPNetwork) GetRdapServer() string {
 	return ""
 }
 
+func (x *RDAPNetwork) GetParentHandle() string {
+	if x != nil {
+		return x.ParentHandle
+	}
+	return ""
+}
+
+func (x *RDAPNetwork) GetCidrBlocks() []*RDAPCIDRBlock {
+	if x != nil {
+		return x.CidrBlocks
+	}
+	return nil
+}
+
+func (x *RDAPNetwork) GetRdapConformance() []string {
+	if x != nil {
+		return x.RdapConformance
+	}
+	return nil
+}
+
 // RDAPResponse wraps the parsed ip network registration record.
 type RDAPResponse struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -613,7 +801,7 @@ type RDAPResponse struct {
 
 func (x *RDAPResponse) Reset() {
 	*x = RDAPResponse{}
-	mi := &file_proto_ippb_rdap_proto_msgTypes[3]
+	mi := &file_proto_ippb_rdap_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -625,7 +813,7 @@ func (x *RDAPResponse) String() string {
 func (*RDAPResponse) ProtoMessage() {}
 
 func (x *RDAPResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_ippb_rdap_proto_msgTypes[3]
+	mi := &file_proto_ippb_rdap_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -638,7 +826,7 @@ func (x *RDAPResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RDAPResponse.ProtoReflect.Descriptor instead.
 func (*RDAPResponse) Descriptor() ([]byte, []int) {
-	return file_proto_ippb_rdap_proto_rawDescGZIP(), []int{3}
+	return file_proto_ippb_rdap_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RDAPResponse) GetNetwork() *RDAPNetwork {
@@ -659,16 +847,23 @@ var File_proto_ippb_rdap_proto protoreflect.FileDescriptor
 
 const file_proto_ippb_rdap_proto_rawDesc = "" +
 	"\n" +
-	"\x15proto/ippb/rdap.proto\x12\x02ip\x1a\x13proto/ippb/ip.proto\x1a\x15proto/ippb/cidr.proto\"p\n" +
+	"\x15proto/ippb/rdap.proto\x12\x02ip\x1a\x13proto/ippb/ip.proto\x1a\x15proto/ippb/cidr.proto\"?\n" +
+	"\rRDAPCIDRBlock\x12\x16\n" +
+	"\x06prefix\x18\x01 \x01(\tR\x06prefix\x12\x16\n" +
+	"\x06length\x18\x02 \x01(\rR\x06length\"\xda\x01\n" +
 	"\n" +
 	"RDAPEntity\x12\x16\n" +
 	"\x06handle\x18\x01 \x01(\tR\x06handle\x12\x0e\n" +
 	"\x02fn\x18\x02 \x01(\tR\x02fn\x12\"\n" +
 	"\x05roles\x18\x03 \x03(\x0e2\f.ip.RDAPRoleR\x05roles\x12\x16\n" +
-	"\x06emails\x18\x04 \x03(\tR\x06emails\"L\n" +
+	"\x06emails\x18\x04 \x03(\tR\x06emails\x12&\n" +
+	"\x04kind\x18\x05 \x01(\x0e2\x12.ip.RDAPEntityKindR\x04kind\x12\x10\n" +
+	"\x03org\x18\x06 \x01(\tR\x03org\x12\x18\n" +
+	"\aaddress\x18\a \x01(\tR\aaddress\x12\x14\n" +
+	"\x05phone\x18\b \x01(\tR\x05phone\"L\n" +
 	"\tRDAPEvent\x12+\n" +
 	"\x06action\x18\x01 \x01(\x0e2\x13.ip.RDAPEventActionR\x06action\x12\x12\n" +
-	"\x04date\x18\x02 \x01(\tR\x04date\"\x91\x03\n" +
+	"\x04date\x18\x02 \x01(\tR\x04date\"\x95\x04\n" +
 	"\vRDAPNetwork\x12\x16\n" +
 	"\x06handle\x18\x01 \x01(\tR\x06handle\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -685,14 +880,18 @@ const file_proto_ippb_rdap_proto_rawDesc = "" +
 	" \x03(\v2\r.ip.RDAPEventR\x06events\x12\x14\n" +
 	"\x05links\x18\v \x03(\tR\x05links\x12\x1f\n" +
 	"\vrdap_server\x18\f \x01(\tR\n" +
-	"rdapServer\"T\n" +
+	"rdapServer\x12#\n" +
+	"\rparent_handle\x18\r \x01(\tR\fparentHandle\x122\n" +
+	"\vcidr_blocks\x18\x0e \x03(\v2\x11.ip.RDAPCIDRBlockR\n" +
+	"cidrBlocks\x12)\n" +
+	"\x10rdap_conformance\x18\x0f \x03(\tR\x0frdapConformance\"T\n" +
 	"\fRDAPResponse\x12)\n" +
 	"\anetwork\x18\x01 \x01(\v2\x0f.ip.RDAPNetworkR\anetwork\x12\x19\n" +
 	"\braw_json\x18\x02 \x01(\tR\arawJson*\\\n" +
 	"\rRDAPIPVersion\x12\x1b\n" +
 	"\x17RDAP_IP_VERSION_UNKNOWN\x10\x00\x12\x16\n" +
 	"\x12RDAP_IP_VERSION_V4\x10\x01\x12\x16\n" +
-	"\x12RDAP_IP_VERSION_V6\x10\x02*\xd4\x02\n" +
+	"\x12RDAP_IP_VERSION_V6\x10\x02*\xeb\x02\n" +
 	"\bRDAPRole\x12\x15\n" +
 	"\x11RDAP_ROLE_UNKNOWN\x10\x00\x12\x18\n" +
 	"\x14RDAP_ROLE_REGISTRANT\x10\x01\x12\x17\n" +
@@ -707,7 +906,8 @@ const file_proto_ippb_rdap_proto_rawDesc = "" +
 	"\x0fRDAP_ROLE_PROXY\x10\n" +
 	"\x12\x1b\n" +
 	"\x17RDAP_ROLE_NOTIFICATIONS\x10\v\x12'\n" +
-	"#RDAP_ROLE_NOC_DEFAULT_ABUSE_CONTACT\x10\f*\xf7\x03\n" +
+	"#RDAP_ROLE_NOC_DEFAULT_ABUSE_CONTACT\x10\f\x12\x15\n" +
+	"\x11RDAP_ROLE_ROUTING\x10\r*\xf7\x03\n" +
 	"\x0fRDAPEventAction\x12\x1d\n" +
 	"\x19RDAP_EVENT_ACTION_UNKNOWN\x10\x00\x12\"\n" +
 	"\x1eRDAP_EVENT_ACTION_REGISTRATION\x10\x01\x12$\n" +
@@ -744,7 +944,14 @@ const file_proto_ippb_rdap_proto_rawDesc = "" +
 	"\x19RDAP_STATUS_PENDING_RENEW\x10\x0f\x12 \n" +
 	"\x1cRDAP_STATUS_PENDING_TRANSFER\x10\x10\x12\x1e\n" +
 	"\x1aRDAP_STATUS_PENDING_UPDATE\x10\x11\x12\x1e\n" +
-	"\x1aRDAP_STATUS_PENDING_DELETE\x10\x122\\\n" +
+	"\x1aRDAP_STATUS_PENDING_DELETE\x10\x12*\xc6\x01\n" +
+	"\x0eRDAPEntityKind\x12\x1c\n" +
+	"\x18RDAP_ENTITY_KIND_UNKNOWN\x10\x00\x12\x1f\n" +
+	"\x1bRDAP_ENTITY_KIND_INDIVIDUAL\x10\x01\x12\x1a\n" +
+	"\x16RDAP_ENTITY_KIND_GROUP\x10\x02\x12\x18\n" +
+	"\x14RDAP_ENTITY_KIND_ORG\x10\x03\x12\x1d\n" +
+	"\x19RDAP_ENTITY_KIND_LOCATION\x10\x04\x12 \n" +
+	"\x1cRDAP_ENTITY_KIND_APPLICATION\x10\x052\\\n" +
 	"\n" +
 	"RDAPLookup\x12$\n" +
 	"\bLookupIP\x12\x06.ip.IP\x1a\x10.ip.RDAPResponse\x12(\n" +
@@ -763,37 +970,41 @@ func file_proto_ippb_rdap_proto_rawDescGZIP() []byte {
 	return file_proto_ippb_rdap_proto_rawDescData
 }
 
-var file_proto_ippb_rdap_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_proto_ippb_rdap_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_proto_ippb_rdap_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_proto_ippb_rdap_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_proto_ippb_rdap_proto_goTypes = []any{
-	(RDAPIPVersion)(0),   // 0: ip.RDAPIPVersion
-	(RDAPRole)(0),        // 1: ip.RDAPRole
-	(RDAPEventAction)(0), // 2: ip.RDAPEventAction
-	(RDAPStatus)(0),      // 3: ip.RDAPStatus
-	(*RDAPEntity)(nil),   // 4: ip.RDAPEntity
-	(*RDAPEvent)(nil),    // 5: ip.RDAPEvent
-	(*RDAPNetwork)(nil),  // 6: ip.RDAPNetwork
-	(*RDAPResponse)(nil), // 7: ip.RDAPResponse
-	(*IP)(nil),           // 8: ip.IP
-	(*CIDR)(nil),         // 9: ip.CIDR
+	(RDAPIPVersion)(0),    // 0: ip.RDAPIPVersion
+	(RDAPRole)(0),         // 1: ip.RDAPRole
+	(RDAPEventAction)(0),  // 2: ip.RDAPEventAction
+	(RDAPStatus)(0),       // 3: ip.RDAPStatus
+	(RDAPEntityKind)(0),   // 4: ip.RDAPEntityKind
+	(*RDAPCIDRBlock)(nil), // 5: ip.RDAPCIDRBlock
+	(*RDAPEntity)(nil),    // 6: ip.RDAPEntity
+	(*RDAPEvent)(nil),     // 7: ip.RDAPEvent
+	(*RDAPNetwork)(nil),   // 8: ip.RDAPNetwork
+	(*RDAPResponse)(nil),  // 9: ip.RDAPResponse
+	(*IP)(nil),            // 10: ip.IP
+	(*CIDR)(nil),          // 11: ip.CIDR
 }
 var file_proto_ippb_rdap_proto_depIdxs = []int32{
-	1, // 0: ip.RDAPEntity.roles:type_name -> ip.RDAPRole
-	2, // 1: ip.RDAPEvent.action:type_name -> ip.RDAPEventAction
-	0, // 2: ip.RDAPNetwork.ip_version:type_name -> ip.RDAPIPVersion
-	3, // 3: ip.RDAPNetwork.status:type_name -> ip.RDAPStatus
-	4, // 4: ip.RDAPNetwork.entities:type_name -> ip.RDAPEntity
-	5, // 5: ip.RDAPNetwork.events:type_name -> ip.RDAPEvent
-	6, // 6: ip.RDAPResponse.network:type_name -> ip.RDAPNetwork
-	8, // 7: ip.RDAPLookup.LookupIP:input_type -> ip.IP
-	9, // 8: ip.RDAPLookup.LookupCIDR:input_type -> ip.CIDR
-	7, // 9: ip.RDAPLookup.LookupIP:output_type -> ip.RDAPResponse
-	7, // 10: ip.RDAPLookup.LookupCIDR:output_type -> ip.RDAPResponse
-	9, // [9:11] is the sub-list for method output_type
-	7, // [7:9] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	1,  // 0: ip.RDAPEntity.roles:type_name -> ip.RDAPRole
+	4,  // 1: ip.RDAPEntity.kind:type_name -> ip.RDAPEntityKind
+	2,  // 2: ip.RDAPEvent.action:type_name -> ip.RDAPEventAction
+	0,  // 3: ip.RDAPNetwork.ip_version:type_name -> ip.RDAPIPVersion
+	3,  // 4: ip.RDAPNetwork.status:type_name -> ip.RDAPStatus
+	6,  // 5: ip.RDAPNetwork.entities:type_name -> ip.RDAPEntity
+	7,  // 6: ip.RDAPNetwork.events:type_name -> ip.RDAPEvent
+	5,  // 7: ip.RDAPNetwork.cidr_blocks:type_name -> ip.RDAPCIDRBlock
+	8,  // 8: ip.RDAPResponse.network:type_name -> ip.RDAPNetwork
+	10, // 9: ip.RDAPLookup.LookupIP:input_type -> ip.IP
+	11, // 10: ip.RDAPLookup.LookupCIDR:input_type -> ip.CIDR
+	9,  // 11: ip.RDAPLookup.LookupIP:output_type -> ip.RDAPResponse
+	9,  // 12: ip.RDAPLookup.LookupCIDR:output_type -> ip.RDAPResponse
+	11, // [11:13] is the sub-list for method output_type
+	9,  // [9:11] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_proto_ippb_rdap_proto_init() }
@@ -808,8 +1019,8 @@ func file_proto_ippb_rdap_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_ippb_rdap_proto_rawDesc), len(file_proto_ippb_rdap_proto_rawDesc)),
-			NumEnums:      4,
-			NumMessages:   4,
+			NumEnums:      5,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
