@@ -209,6 +209,59 @@ For v1 we ship a hand-coded encoder/decoder against the IP message
 specifically (no annotations / reflection yet). The interface lives in
 `fixedlength/ip.go` so the path to a generic version is short.
 
+## RDAP Lookup service
+
+### Proto shape
+
+`proto/ippb/rdap.proto` adds:
+
+| Message | Key fields |
+|---|---|
+| `RDAPEntity` | handle, fn (vCard FN), roles, emails |
+| `RDAPEvent` | action (eventAction), date (eventDate) |
+| `RDAPNetwork` | handle, name, type, start/end address, ip_version, country, status, entities, events, links, rdap_server |
+| `RDAPResponse` | network, raw_json |
+
+Service `RDAPLookup` exposes two **unary** RPCs:
+- `LookupIP(IP) → RDAPResponse`
+- `LookupCIDR(CIDR) → RDAPResponse`
+
+### Bootstrap (RFC 7484)
+
+`rdap/bootstrap.go` fetches `data.iana.org/rdap/ipv4.json` and
+`data.iana.org/rdap/ipv6.json` once at server startup. Each bootstrap
+file maps IP prefixes to `[service_url, ...]` lists. `Resolve(ip)` finds
+the most-specific (longest prefix) match and returns the first URL.
+The returned URL always ends with `/`.
+
+Bootstrap is in-memory only — restart the server to refresh.
+
+### HTTP client and JSON parsing
+
+`rdap/client.go` constructs:
+- `GET {baseURL}ip/{ip}` for single-IP lookups
+- `GET {baseURL}ip/{ip}/{prefix}` for CIDR lookups
+
+RDAP vCard parsing: `vcardArray` is `["vcard", [[prop, params, type, value], ...]]`.
+`parseVCard` extracts `fn` and `email` entries from this structure.
+
+`raw_json` is the full response body preserved verbatim in
+`RDAPResponse` for callers that need fields not modelled in proto.
+
+### IP text rendering in rdap package
+
+`rdap.ipFromProto` reconstructs `net.IP` from the two `sint64` halves
+(same logic as `cmd/client/main.go:renderIP`). `renderNetIP` calls
+`.To4()` before `.String()` so IPv4-mapped addresses print as dotted
+decimal, not `::ffff:...` notation.
+
+### Default ports
+
+| Service | Default port |
+|---|---|
+| LocalLookup | 50097 |
+| RDAPLookup | 50098 |
+
 ## Open questions
 
 - IPv6 "::ffff:1.2.3.4" v4-mapped form — should it route through the

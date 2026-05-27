@@ -24,7 +24,7 @@ const (
 // IP encodes any IPv4 or IPv6 address as a single 128-bit value split
 // into two sint64 halves. IPv4 addresses are stored as IPv4-mapped
 // IPv6 (::ffff:0:0/96) on the wire so consumers can treat both
-// uniformly. The original client-supplied form is preserved in the
+// uniformly. The original client-supplied form may be preserved in the
 // version oneof for reversible round-tripping and so policy code can
 // branch on the intended client family.
 type IP struct {
@@ -45,6 +45,7 @@ type IP struct {
 	//
 	//	*IP_V4
 	//	*IP_V6
+	//	*IP_None
 	Version       isIP_Version `protobuf_oneof:"version"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -119,6 +120,15 @@ func (x *IP) GetV6() *IPv6Address {
 	return nil
 }
 
+func (x *IP) GetNone() *IP_Versionless {
+	if x != nil {
+		if x, ok := x.Version.(*IP_None); ok {
+			return x.None
+		}
+	}
+	return nil
+}
+
 type isIP_Version interface {
 	isIP_Version()
 }
@@ -131,20 +141,65 @@ type IP_V6 struct {
 	V6 *IPv6Address `protobuf:"bytes,4,opt,name=v6,proto3,oneof"`
 }
 
+type IP_None struct {
+	None *IP_Versionless `protobuf:"bytes,5,opt,name=none,proto3,oneof"`
+}
+
 func (*IP_V4) isIP_Version() {}
 
 func (*IP_V6) isIP_Version() {}
+
+func (*IP_None) isIP_Version() {}
+
+// Low-overhead way of representing lack of formatted data within this message in the versioned oneof "version"
+type IP_Versionless struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IP_Versionless) Reset() {
+	*x = IP_Versionless{}
+	mi := &file_proto_ippb_ip_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IP_Versionless) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IP_Versionless) ProtoMessage() {}
+
+func (x *IP_Versionless) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ippb_ip_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IP_Versionless.ProtoReflect.Descriptor instead.
+func (*IP_Versionless) Descriptor() ([]byte, []int) {
+	return file_proto_ippb_ip_proto_rawDescGZIP(), []int{0, 0}
+}
 
 var File_proto_ippb_ip_proto protoreflect.FileDescriptor
 
 const file_proto_ippb_ip_proto_rawDesc = "" +
 	"\n" +
-	"\x13proto/ippb/ip.proto\x12\x02ip\x1a\x15proto/ippb/ipv4.proto\x1a\x15proto/ippb/ipv6.proto\"\xaf\x01\n" +
+	"\x13proto/ippb/ip.proto\x12\x02ip\x1a\x15proto/ippb/ipv4.proto\x1a\x15proto/ippb/ipv6.proto\"\xe8\x01\n" +
 	"\x02IP\x12%\n" +
 	"\x0enetwork_prefix\x18\x01 \x01(\x12R\rnetworkPrefix\x121\n" +
 	"\x14interface_identifier\x18\x02 \x01(\x12R\x13interfaceIdentifier\x12!\n" +
 	"\x02v4\x18\x03 \x01(\v2\x0f.ip.IPv4AddressH\x00R\x02v4\x12!\n" +
-	"\x02v6\x18\x04 \x01(\v2\x0f.ip.IPv6AddressH\x00R\x02v6B\t\n" +
+	"\x02v6\x18\x04 \x01(\v2\x0f.ip.IPv6AddressH\x00R\x02v6\x12(\n" +
+	"\x04none\x18\x05 \x01(\v2\x12.ip.IP.VersionlessH\x00R\x04none\x1a\r\n" +
+	"\vVersionlessB\t\n" +
 	"\aversionB1Z/github.com/accretional/proto-ip/proto/ippb;ippbb\x06proto3"
 
 var (
@@ -159,20 +214,22 @@ func file_proto_ippb_ip_proto_rawDescGZIP() []byte {
 	return file_proto_ippb_ip_proto_rawDescData
 }
 
-var file_proto_ippb_ip_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_proto_ippb_ip_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_proto_ippb_ip_proto_goTypes = []any{
-	(*IP)(nil),          // 0: ip.IP
-	(*IPv4Address)(nil), // 1: ip.IPv4Address
-	(*IPv6Address)(nil), // 2: ip.IPv6Address
+	(*IP)(nil),             // 0: ip.IP
+	(*IP_Versionless)(nil), // 1: ip.IP.Versionless
+	(*IPv4Address)(nil),    // 2: ip.IPv4Address
+	(*IPv6Address)(nil),    // 3: ip.IPv6Address
 }
 var file_proto_ippb_ip_proto_depIdxs = []int32{
-	1, // 0: ip.IP.v4:type_name -> ip.IPv4Address
-	2, // 1: ip.IP.v6:type_name -> ip.IPv6Address
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	2, // 0: ip.IP.v4:type_name -> ip.IPv4Address
+	3, // 1: ip.IP.v6:type_name -> ip.IPv6Address
+	1, // 2: ip.IP.none:type_name -> ip.IP.Versionless
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_proto_ippb_ip_proto_init() }
@@ -185,6 +242,7 @@ func file_proto_ippb_ip_proto_init() {
 	file_proto_ippb_ip_proto_msgTypes[0].OneofWrappers = []any{
 		(*IP_V4)(nil),
 		(*IP_V6)(nil),
+		(*IP_None)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -192,7 +250,7 @@ func file_proto_ippb_ip_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_ippb_ip_proto_rawDesc), len(file_proto_ippb_ip_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   1,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -69,3 +69,26 @@ Append-only notebook. Newest entries at the bottom.
       attempt.
     - When fuzz finds something, fix the underlying bug. Always.
 - Next: proto-fixedlength initial implementation per CLAUDE.md.
+
+## 2026-05-26
+
+- Added `RDAPLookup` gRPC service for RDAP registration lookups on IP
+  addresses and CIDR blocks.
+- New `proto/ippb/rdap.proto` defines: `RDAPEntity`, `RDAPEvent`,
+  `RDAPNetwork`, `RDAPResponse`, and the `RDAPLookup` service
+  (`LookupIP(IP)`, `LookupCIDR(CIDR)`) — both unary RPCs.
+- New `rdap/` package:
+    - `bootstrap.go`: fetches IANA IPv4/IPv6 bootstrap files (RFC 7484)
+      on startup; resolves any IP to the correct RIR RDAP base URL via
+      most-specific prefix match.
+    - `client.go`: HTTP RDAP client; parses vCard entities (fn, emails),
+      events, links, status from the JSON response into `RDAPNetwork`
+      proto; preserves raw JSON in `RDAPResponse.raw_json`.
+    - `server.go`: gRPC server adapter implementing `RDAPLookupServer`.
+- New `cmd/rdap-server/` — binds port 50098 by default.
+- New `cmd/rdap-client/` — CLI driver for `ip` and `cidr` subcommands,
+  used by `LET_IT_RIP.sh`.
+- Smoke tests verified live against ARIN (8.8.8.8, 2001:4860:4860::8888)
+  and APNIC (1.1.1.0/24) — correct RIR routing and structured response
+  fields confirmed.
+- `LET_IT_RIP.sh` updated with RDAP smoke test section.

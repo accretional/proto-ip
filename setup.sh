@@ -55,7 +55,7 @@ fi
 export PATH="$GOBIN:$PATH"
 
 PROTO_DIR="proto/ippb"
-PROTO_FILES=("$PROTO_DIR"/ipv4.proto "$PROTO_DIR"/ipv6.proto "$PROTO_DIR"/ip.proto "$PROTO_DIR"/subnet.proto "$PROTO_DIR"/cidr.proto "$PROTO_DIR"/local_lookup.proto)
+PROTO_FILES=("$PROTO_DIR"/ipv4.proto "$PROTO_DIR"/ipv6.proto "$PROTO_DIR"/ip.proto "$PROTO_DIR"/subnet.proto "$PROTO_DIR"/cidr.proto "$PROTO_DIR"/local_lookup.proto "$PROTO_DIR"/rdap.proto)
 
 # Detect whether any .proto is newer than its .pb.go (or stubs missing).
 NEED_REGEN=false
@@ -68,6 +68,9 @@ for src in "${PROTO_FILES[@]}"; do
     fi
 done
 if [[ ! -f "$PROTO_DIR/local_lookup_grpc.pb.go" ]]; then
+    NEED_REGEN=true
+fi
+if [[ ! -f "$PROTO_DIR/rdap_grpc.pb.go" ]]; then
     NEED_REGEN=true
 fi
 
