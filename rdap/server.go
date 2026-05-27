@@ -43,6 +43,17 @@ func (s *Server) LookupCIDR(ctx context.Context, cidr *pb.CIDR) (*pb.RDAPRespons
 	return resp, nil
 }
 
+func (s *Server) LookupAutnum(ctx context.Context, asn *pb.ASN) (*pb.RDAPAutnumResponse, error) {
+	if asn.GetNumber() == 0 {
+		return nil, status.Error(codes.InvalidArgument, "ASN.number must be non-zero")
+	}
+	resp, err := s.client.LookupAutnum(ctx, asn)
+	if err != nil {
+		return nil, status.Errorf(codes.Unavailable, "RDAP autnum lookup: %v", err)
+	}
+	return resp, nil
+}
+
 // RenderCIDR returns the text form of a CIDR proto for logging.
 func RenderCIDR(cidr *pb.CIDR) string {
 	ip := ipFromProto(cidr.GetIp())

@@ -166,9 +166,50 @@ message RDAPResponse {
   string raw_json = 2;
 }
 
-// RDAPLookup performs RDAP registration lookups for IP addresses and
-// CIDR blocks. It uses the IANA bootstrap registry (RFC 7484) to
-// route each query to the correct Regional Internet Registry.
+// ASN wraps a 32-bit Autonomous System Number (RFC 4893 extended ASNs
+// fit in 32 bits; legacy 16-bit ASNs are a subset).
+message ASN {
+  uint32 number = 1;
+}
+
+// RDAPAutnum is the autnum object returned by an RDAP registry for an
+// Autonomous System Number (RFC 7483 §7).
+message RDAPAutnum {
+  // RIR-assigned handle (e.g. "AS15169" from ARIN).
+  string handle = 1;
+  // Human-readable name of the AS.
+  string name = 2;
+  // Allocation type string (e.g. "DIRECT ALLOCATION").
+  string type = 3;
+  // ISO 3166-1 alpha-2 country code.
+  string country = 4;
+  // First AS number in the registered range.
+  uint32 start_autnum = 5;
+  // Last AS number in the registered range.
+  uint32 end_autnum = 6;
+  repeated RDAPStatus status = 7;
+  repeated RDAPEntity entities = 8;
+  repeated RDAPEvent events = 9;
+  // Self / alternate link hrefs from the RDAP links array.
+  repeated string links = 10;
+  // Base URL of the RDAP server that was queried.
+  string rdap_server = 11;
+  // RDAP conformance extensions declared by the server.
+  repeated string rdap_conformance = 12;
+}
+
+// RDAPAutnumResponse wraps the parsed AS registration record.
+message RDAPAutnumResponse {
+  RDAPAutnum autnum = 1;
+  // Full RDAP JSON response body, preserved for callers that need
+  // fields not modelled in RDAPAutnum.
+  string raw_json = 2;
+}
+
+// RDAPLookup performs RDAP registration lookups for IP addresses,
+// CIDR blocks, and Autonomous System Numbers. It uses the IANA
+// bootstrap registry (RFC 7484) to route each query to the correct
+// Regional Internet Registry.
 service RDAPLookup {
   // LookupIP queries the RDAP registry for a single IP address.
   rpc LookupIP(IP) returns (RDAPResponse);
@@ -176,4 +217,7 @@ service RDAPLookup {
   // The full prefix (e.g. "10.0.0.0/8") is forwarded to the RIR so
   // the response covers the exact block, not just the containing one.
   rpc LookupCIDR(CIDR) returns (RDAPResponse);
+  // LookupAutnum queries the RDAP registry for an Autonomous System
+  // Number. The bootstrap file routes the query to the correct RIR.
+  rpc LookupAutnum(ASN) returns (RDAPAutnumResponse);
 }

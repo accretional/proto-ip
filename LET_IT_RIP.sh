@@ -93,6 +93,14 @@ echo "  RDAP lookup: 1.1.1.0/24 (Cloudflare, CIDR)..."
 bin/rdap-client -addr "localhost:$RDAP_PORT" cidr 1.1.1.0/24
 echo ""
 
+echo "  RDAP lookup: AS15169 (Google, ASN)..."
+bin/rdap-client -addr "localhost:$RDAP_PORT" asn 15169
+echo ""
+
+echo "  RDAP lookup: AS13335 (Cloudflare, ASN)..."
+bin/rdap-client -addr "localhost:$RDAP_PORT" asn 13335
+echo ""
+
 echo "  ✓ RDAP smoke tests passed"
 
 echo ""

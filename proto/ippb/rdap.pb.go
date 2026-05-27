@@ -843,6 +843,250 @@ func (x *RDAPResponse) GetRawJson() string {
 	return ""
 }
 
+// ASN wraps a 32-bit Autonomous System Number (RFC 4893 extended ASNs
+// fit in 32 bits; legacy 16-bit ASNs are a subset).
+type ASN struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Number        uint32                 `protobuf:"varint,1,opt,name=number,proto3" json:"number,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ASN) Reset() {
+	*x = ASN{}
+	mi := &file_proto_ippb_rdap_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ASN) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ASN) ProtoMessage() {}
+
+func (x *ASN) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ippb_rdap_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ASN.ProtoReflect.Descriptor instead.
+func (*ASN) Descriptor() ([]byte, []int) {
+	return file_proto_ippb_rdap_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ASN) GetNumber() uint32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
+// RDAPAutnum is the autnum object returned by an RDAP registry for an
+// Autonomous System Number (RFC 7483 §7).
+type RDAPAutnum struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// RIR-assigned handle (e.g. "AS15169" from ARIN).
+	Handle string `protobuf:"bytes,1,opt,name=handle,proto3" json:"handle,omitempty"`
+	// Human-readable name of the AS.
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// Allocation type string (e.g. "DIRECT ALLOCATION").
+	Type string `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`
+	// ISO 3166-1 alpha-2 country code.
+	Country string `protobuf:"bytes,4,opt,name=country,proto3" json:"country,omitempty"`
+	// First AS number in the registered range.
+	StartAutnum uint32 `protobuf:"varint,5,opt,name=start_autnum,json=startAutnum,proto3" json:"start_autnum,omitempty"`
+	// Last AS number in the registered range.
+	EndAutnum uint32        `protobuf:"varint,6,opt,name=end_autnum,json=endAutnum,proto3" json:"end_autnum,omitempty"`
+	Status    []RDAPStatus  `protobuf:"varint,7,rep,packed,name=status,proto3,enum=ip.RDAPStatus" json:"status,omitempty"`
+	Entities  []*RDAPEntity `protobuf:"bytes,8,rep,name=entities,proto3" json:"entities,omitempty"`
+	Events    []*RDAPEvent  `protobuf:"bytes,9,rep,name=events,proto3" json:"events,omitempty"`
+	// Self / alternate link hrefs from the RDAP links array.
+	Links []string `protobuf:"bytes,10,rep,name=links,proto3" json:"links,omitempty"`
+	// Base URL of the RDAP server that was queried.
+	RdapServer string `protobuf:"bytes,11,opt,name=rdap_server,json=rdapServer,proto3" json:"rdap_server,omitempty"`
+	// RDAP conformance extensions declared by the server.
+	RdapConformance []string `protobuf:"bytes,12,rep,name=rdap_conformance,json=rdapConformance,proto3" json:"rdap_conformance,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *RDAPAutnum) Reset() {
+	*x = RDAPAutnum{}
+	mi := &file_proto_ippb_rdap_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RDAPAutnum) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RDAPAutnum) ProtoMessage() {}
+
+func (x *RDAPAutnum) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ippb_rdap_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RDAPAutnum.ProtoReflect.Descriptor instead.
+func (*RDAPAutnum) Descriptor() ([]byte, []int) {
+	return file_proto_ippb_rdap_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *RDAPAutnum) GetHandle() string {
+	if x != nil {
+		return x.Handle
+	}
+	return ""
+}
+
+func (x *RDAPAutnum) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *RDAPAutnum) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *RDAPAutnum) GetCountry() string {
+	if x != nil {
+		return x.Country
+	}
+	return ""
+}
+
+func (x *RDAPAutnum) GetStartAutnum() uint32 {
+	if x != nil {
+		return x.StartAutnum
+	}
+	return 0
+}
+
+func (x *RDAPAutnum) GetEndAutnum() uint32 {
+	if x != nil {
+		return x.EndAutnum
+	}
+	return 0
+}
+
+func (x *RDAPAutnum) GetStatus() []RDAPStatus {
+	if x != nil {
+		return x.Status
+	}
+	return nil
+}
+
+func (x *RDAPAutnum) GetEntities() []*RDAPEntity {
+	if x != nil {
+		return x.Entities
+	}
+	return nil
+}
+
+func (x *RDAPAutnum) GetEvents() []*RDAPEvent {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+func (x *RDAPAutnum) GetLinks() []string {
+	if x != nil {
+		return x.Links
+	}
+	return nil
+}
+
+func (x *RDAPAutnum) GetRdapServer() string {
+	if x != nil {
+		return x.RdapServer
+	}
+	return ""
+}
+
+func (x *RDAPAutnum) GetRdapConformance() []string {
+	if x != nil {
+		return x.RdapConformance
+	}
+	return nil
+}
+
+// RDAPAutnumResponse wraps the parsed AS registration record.
+type RDAPAutnumResponse struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Autnum *RDAPAutnum            `protobuf:"bytes,1,opt,name=autnum,proto3" json:"autnum,omitempty"`
+	// Full RDAP JSON response body, preserved for callers that need
+	// fields not modelled in RDAPAutnum.
+	RawJson       string `protobuf:"bytes,2,opt,name=raw_json,json=rawJson,proto3" json:"raw_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RDAPAutnumResponse) Reset() {
+	*x = RDAPAutnumResponse{}
+	mi := &file_proto_ippb_rdap_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RDAPAutnumResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RDAPAutnumResponse) ProtoMessage() {}
+
+func (x *RDAPAutnumResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ippb_rdap_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RDAPAutnumResponse.ProtoReflect.Descriptor instead.
+func (*RDAPAutnumResponse) Descriptor() ([]byte, []int) {
+	return file_proto_ippb_rdap_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *RDAPAutnumResponse) GetAutnum() *RDAPAutnum {
+	if x != nil {
+		return x.Autnum
+	}
+	return nil
+}
+
+func (x *RDAPAutnumResponse) GetRawJson() string {
+	if x != nil {
+		return x.RawJson
+	}
+	return ""
+}
+
 var File_proto_ippb_rdap_proto protoreflect.FileDescriptor
 
 const file_proto_ippb_rdap_proto_rawDesc = "" +
@@ -887,6 +1131,28 @@ const file_proto_ippb_rdap_proto_rawDesc = "" +
 	"\x10rdap_conformance\x18\x0f \x03(\tR\x0frdapConformance\"T\n" +
 	"\fRDAPResponse\x12)\n" +
 	"\anetwork\x18\x01 \x01(\v2\x0f.ip.RDAPNetworkR\anetwork\x12\x19\n" +
+	"\braw_json\x18\x02 \x01(\tR\arawJson\"\x1d\n" +
+	"\x03ASN\x12\x16\n" +
+	"\x06number\x18\x01 \x01(\rR\x06number\"\x85\x03\n" +
+	"\n" +
+	"RDAPAutnum\x12\x16\n" +
+	"\x06handle\x18\x01 \x01(\tR\x06handle\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
+	"\x04type\x18\x03 \x01(\tR\x04type\x12\x18\n" +
+	"\acountry\x18\x04 \x01(\tR\acountry\x12!\n" +
+	"\fstart_autnum\x18\x05 \x01(\rR\vstartAutnum\x12\x1d\n" +
+	"\n" +
+	"end_autnum\x18\x06 \x01(\rR\tendAutnum\x12&\n" +
+	"\x06status\x18\a \x03(\x0e2\x0e.ip.RDAPStatusR\x06status\x12*\n" +
+	"\bentities\x18\b \x03(\v2\x0e.ip.RDAPEntityR\bentities\x12%\n" +
+	"\x06events\x18\t \x03(\v2\r.ip.RDAPEventR\x06events\x12\x14\n" +
+	"\x05links\x18\n" +
+	" \x03(\tR\x05links\x12\x1f\n" +
+	"\vrdap_server\x18\v \x01(\tR\n" +
+	"rdapServer\x12)\n" +
+	"\x10rdap_conformance\x18\f \x03(\tR\x0frdapConformance\"W\n" +
+	"\x12RDAPAutnumResponse\x12&\n" +
+	"\x06autnum\x18\x01 \x01(\v2\x0e.ip.RDAPAutnumR\x06autnum\x12\x19\n" +
 	"\braw_json\x18\x02 \x01(\tR\arawJson*\\\n" +
 	"\rRDAPIPVersion\x12\x1b\n" +
 	"\x17RDAP_IP_VERSION_UNKNOWN\x10\x00\x12\x16\n" +
@@ -951,12 +1217,13 @@ const file_proto_ippb_rdap_proto_rawDesc = "" +
 	"\x16RDAP_ENTITY_KIND_GROUP\x10\x02\x12\x18\n" +
 	"\x14RDAP_ENTITY_KIND_ORG\x10\x03\x12\x1d\n" +
 	"\x19RDAP_ENTITY_KIND_LOCATION\x10\x04\x12 \n" +
-	"\x1cRDAP_ENTITY_KIND_APPLICATION\x10\x052\\\n" +
+	"\x1cRDAP_ENTITY_KIND_APPLICATION\x10\x052\x8d\x01\n" +
 	"\n" +
 	"RDAPLookup\x12$\n" +
 	"\bLookupIP\x12\x06.ip.IP\x1a\x10.ip.RDAPResponse\x12(\n" +
 	"\n" +
-	"LookupCIDR\x12\b.ip.CIDR\x1a\x10.ip.RDAPResponseB1Z/github.com/accretional/proto-ip/proto/ippb;ippbb\x06proto3"
+	"LookupCIDR\x12\b.ip.CIDR\x1a\x10.ip.RDAPResponse\x12/\n" +
+	"\fLookupAutnum\x12\a.ip.ASN\x1a\x16.ip.RDAPAutnumResponseB1Z/github.com/accretional/proto-ip/proto/ippb;ippbb\x06proto3"
 
 var (
 	file_proto_ippb_rdap_proto_rawDescOnce sync.Once
@@ -971,20 +1238,23 @@ func file_proto_ippb_rdap_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_ippb_rdap_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_proto_ippb_rdap_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_proto_ippb_rdap_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_proto_ippb_rdap_proto_goTypes = []any{
-	(RDAPIPVersion)(0),    // 0: ip.RDAPIPVersion
-	(RDAPRole)(0),         // 1: ip.RDAPRole
-	(RDAPEventAction)(0),  // 2: ip.RDAPEventAction
-	(RDAPStatus)(0),       // 3: ip.RDAPStatus
-	(RDAPEntityKind)(0),   // 4: ip.RDAPEntityKind
-	(*RDAPCIDRBlock)(nil), // 5: ip.RDAPCIDRBlock
-	(*RDAPEntity)(nil),    // 6: ip.RDAPEntity
-	(*RDAPEvent)(nil),     // 7: ip.RDAPEvent
-	(*RDAPNetwork)(nil),   // 8: ip.RDAPNetwork
-	(*RDAPResponse)(nil),  // 9: ip.RDAPResponse
-	(*IP)(nil),            // 10: ip.IP
-	(*CIDR)(nil),          // 11: ip.CIDR
+	(RDAPIPVersion)(0),         // 0: ip.RDAPIPVersion
+	(RDAPRole)(0),              // 1: ip.RDAPRole
+	(RDAPEventAction)(0),       // 2: ip.RDAPEventAction
+	(RDAPStatus)(0),            // 3: ip.RDAPStatus
+	(RDAPEntityKind)(0),        // 4: ip.RDAPEntityKind
+	(*RDAPCIDRBlock)(nil),      // 5: ip.RDAPCIDRBlock
+	(*RDAPEntity)(nil),         // 6: ip.RDAPEntity
+	(*RDAPEvent)(nil),          // 7: ip.RDAPEvent
+	(*RDAPNetwork)(nil),        // 8: ip.RDAPNetwork
+	(*RDAPResponse)(nil),       // 9: ip.RDAPResponse
+	(*ASN)(nil),                // 10: ip.ASN
+	(*RDAPAutnum)(nil),         // 11: ip.RDAPAutnum
+	(*RDAPAutnumResponse)(nil), // 12: ip.RDAPAutnumResponse
+	(*IP)(nil),                 // 13: ip.IP
+	(*CIDR)(nil),               // 14: ip.CIDR
 }
 var file_proto_ippb_rdap_proto_depIdxs = []int32{
 	1,  // 0: ip.RDAPEntity.roles:type_name -> ip.RDAPRole
@@ -996,15 +1266,21 @@ var file_proto_ippb_rdap_proto_depIdxs = []int32{
 	7,  // 6: ip.RDAPNetwork.events:type_name -> ip.RDAPEvent
 	5,  // 7: ip.RDAPNetwork.cidr_blocks:type_name -> ip.RDAPCIDRBlock
 	8,  // 8: ip.RDAPResponse.network:type_name -> ip.RDAPNetwork
-	10, // 9: ip.RDAPLookup.LookupIP:input_type -> ip.IP
-	11, // 10: ip.RDAPLookup.LookupCIDR:input_type -> ip.CIDR
-	9,  // 11: ip.RDAPLookup.LookupIP:output_type -> ip.RDAPResponse
-	9,  // 12: ip.RDAPLookup.LookupCIDR:output_type -> ip.RDAPResponse
-	11, // [11:13] is the sub-list for method output_type
-	9,  // [9:11] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	3,  // 9: ip.RDAPAutnum.status:type_name -> ip.RDAPStatus
+	6,  // 10: ip.RDAPAutnum.entities:type_name -> ip.RDAPEntity
+	7,  // 11: ip.RDAPAutnum.events:type_name -> ip.RDAPEvent
+	11, // 12: ip.RDAPAutnumResponse.autnum:type_name -> ip.RDAPAutnum
+	13, // 13: ip.RDAPLookup.LookupIP:input_type -> ip.IP
+	14, // 14: ip.RDAPLookup.LookupCIDR:input_type -> ip.CIDR
+	10, // 15: ip.RDAPLookup.LookupAutnum:input_type -> ip.ASN
+	9,  // 16: ip.RDAPLookup.LookupIP:output_type -> ip.RDAPResponse
+	9,  // 17: ip.RDAPLookup.LookupCIDR:output_type -> ip.RDAPResponse
+	12, // 18: ip.RDAPLookup.LookupAutnum:output_type -> ip.RDAPAutnumResponse
+	16, // [16:19] is the sub-list for method output_type
+	13, // [13:16] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_proto_ippb_rdap_proto_init() }
@@ -1020,7 +1296,7 @@ func file_proto_ippb_rdap_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_ippb_rdap_proto_rawDesc), len(file_proto_ippb_rdap_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   5,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

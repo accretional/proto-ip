@@ -3,8 +3,9 @@
 //
 // Usage:
 //
-//	rdap-client [-addr HOST:PORT] ip   <address>      # e.g. 8.8.8.8
-//	rdap-client [-addr HOST:PORT] cidr <prefix>       # e.g. 2001:db8::/32
+//	rdap-client [-addr HOST:PORT] ip    <address>      # e.g. 8.8.8.8
+//	rdap-client [-addr HOST:PORT] cidr  <prefix>       # e.g. 2001:db8::/32
+//	rdap-client [-addr HOST:PORT] asn   <number>       # e.g. 15169
 package main
 
 import (
@@ -31,7 +32,7 @@ func main() {
 
 	args := flag.Args()
 	if len(args) != 2 {
-		fmt.Fprintln(os.Stderr, "usage: rdap-client [-addr HOST:PORT] (ip <addr> | cidr <prefix>)")
+		fmt.Fprintln(os.Stderr, "usage: rdap-client [-addr HOST:PORT] (ip <addr> | cidr <prefix> | asn <number>)")
 		os.Exit(2)
 	}
 
@@ -58,6 +59,12 @@ func main() {
 			log.Fatalf("LookupCIDR(%s): %v", args[1], err)
 		}
 		printResponse(resp)
+	case "asn":
+		resp, err := client.LookupAutnum(ctx, parseASN(args[1]))
+		if err != nil {
+			log.Fatalf("LookupAutnum(%s): %v", args[1], err)
+		}
+		printAutnumResponse(resp)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand %q\n", args[0])
 		os.Exit(2)
@@ -107,6 +114,44 @@ func printResponse(resp *pb.RDAPResponse) {
 	}
 }
 
+func printAutnumResponse(resp *pb.RDAPAutnumResponse) {
+	a := resp.GetAutnum()
+	fmt.Printf("handle:          %s\n", a.GetHandle())
+	fmt.Printf("name:            %s\n", a.GetName())
+	fmt.Printf("type:            %s\n", a.GetType())
+	fmt.Printf("country:         %s\n", a.GetCountry())
+	fmt.Printf("range:           AS%d – AS%d\n", a.GetStartAutnum(), a.GetEndAutnum())
+	statuses := make([]string, len(a.GetStatus()))
+	for i, s := range a.GetStatus() {
+		statuses[i] = shortEnum(s.String(), "RDAP_STATUS_")
+	}
+	fmt.Printf("status:          %s\n", strings.Join(statuses, ", "))
+	fmt.Printf("rdap_server:     %s\n", a.GetRdapServer())
+	fmt.Printf("conformance:     %s\n", strings.Join(a.GetRdapConformance(), ", "))
+	for _, e := range a.GetEntities() {
+		roles := make([]string, len(e.GetRoles()))
+		for i, r := range e.GetRoles() {
+			roles[i] = shortEnum(r.String(), "RDAP_ROLE_")
+		}
+		kind := shortEnum(e.GetKind().String(), "RDAP_ENTITY_KIND_")
+		fmt.Printf("entity:          handle=%s kind=%s fn=%q org=%q roles=%s\n",
+			e.GetHandle(), kind, e.GetFn(), e.GetOrg(), strings.Join(roles, ","))
+		if addr := e.GetAddress(); addr != "" {
+			fmt.Printf("  address:       %s\n", strings.ReplaceAll(addr, "\n", " | "))
+		}
+		if phone := e.GetPhone(); phone != "" {
+			fmt.Printf("  phone:         %s\n", phone)
+		}
+		if emails := e.GetEmails(); len(emails) > 0 {
+			fmt.Printf("  emails:        %s\n", strings.Join(emails, ", "))
+		}
+	}
+	for _, ev := range a.GetEvents() {
+		fmt.Printf("event:           %s @ %s\n",
+			shortEnum(ev.GetAction().String(), "RDAP_EVENT_ACTION_"), ev.GetDate())
+	}
+}
+
 // shortEnum strips the generated enum prefix and lowercases the result
 // to match the original RDAP JSON value form (e.g. "active", "v4").
 func shortEnum(s, prefix string) string {
@@ -119,6 +164,14 @@ func parseIP(s string) *pb.IP {
 		log.Fatalf("invalid IP address: %q", s)
 	}
 	return netIPToProto(ip)
+}
+
+func parseASN(s string) *pb.ASN {
+	var n uint32
+	if _, err := fmt.Sscanf(strings.TrimPrefix(s, "AS"), "%d", &n); err != nil || n == 0 {
+		log.Fatalf("invalid ASN: %q", s)
+	}
+	return &pb.ASN{Number: n}
 }
 
 func parseCIDR(s string) *pb.CIDR {

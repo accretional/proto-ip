@@ -19,17 +19,19 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	RDAPLookup_LookupIP_FullMethodName   = "/ip.RDAPLookup/LookupIP"
-	RDAPLookup_LookupCIDR_FullMethodName = "/ip.RDAPLookup/LookupCIDR"
+	RDAPLookup_LookupIP_FullMethodName     = "/ip.RDAPLookup/LookupIP"
+	RDAPLookup_LookupCIDR_FullMethodName   = "/ip.RDAPLookup/LookupCIDR"
+	RDAPLookup_LookupAutnum_FullMethodName = "/ip.RDAPLookup/LookupAutnum"
 )
 
 // RDAPLookupClient is the client API for RDAPLookup service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// RDAPLookup performs RDAP registration lookups for IP addresses and
-// CIDR blocks. It uses the IANA bootstrap registry (RFC 7484) to
-// route each query to the correct Regional Internet Registry.
+// RDAPLookup performs RDAP registration lookups for IP addresses,
+// CIDR blocks, and Autonomous System Numbers. It uses the IANA
+// bootstrap registry (RFC 7484) to route each query to the correct
+// Regional Internet Registry.
 type RDAPLookupClient interface {
 	// LookupIP queries the RDAP registry for a single IP address.
 	LookupIP(ctx context.Context, in *IP, opts ...grpc.CallOption) (*RDAPResponse, error)
@@ -37,6 +39,9 @@ type RDAPLookupClient interface {
 	// The full prefix (e.g. "10.0.0.0/8") is forwarded to the RIR so
 	// the response covers the exact block, not just the containing one.
 	LookupCIDR(ctx context.Context, in *CIDR, opts ...grpc.CallOption) (*RDAPResponse, error)
+	// LookupAutnum queries the RDAP registry for an Autonomous System
+	// Number. The bootstrap file routes the query to the correct RIR.
+	LookupAutnum(ctx context.Context, in *ASN, opts ...grpc.CallOption) (*RDAPAutnumResponse, error)
 }
 
 type rDAPLookupClient struct {
@@ -67,13 +72,24 @@ func (c *rDAPLookupClient) LookupCIDR(ctx context.Context, in *CIDR, opts ...grp
 	return out, nil
 }
 
+func (c *rDAPLookupClient) LookupAutnum(ctx context.Context, in *ASN, opts ...grpc.CallOption) (*RDAPAutnumResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RDAPAutnumResponse)
+	err := c.cc.Invoke(ctx, RDAPLookup_LookupAutnum_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RDAPLookupServer is the server API for RDAPLookup service.
 // All implementations must embed UnimplementedRDAPLookupServer
 // for forward compatibility.
 //
-// RDAPLookup performs RDAP registration lookups for IP addresses and
-// CIDR blocks. It uses the IANA bootstrap registry (RFC 7484) to
-// route each query to the correct Regional Internet Registry.
+// RDAPLookup performs RDAP registration lookups for IP addresses,
+// CIDR blocks, and Autonomous System Numbers. It uses the IANA
+// bootstrap registry (RFC 7484) to route each query to the correct
+// Regional Internet Registry.
 type RDAPLookupServer interface {
 	// LookupIP queries the RDAP registry for a single IP address.
 	LookupIP(context.Context, *IP) (*RDAPResponse, error)
@@ -81,6 +97,9 @@ type RDAPLookupServer interface {
 	// The full prefix (e.g. "10.0.0.0/8") is forwarded to the RIR so
 	// the response covers the exact block, not just the containing one.
 	LookupCIDR(context.Context, *CIDR) (*RDAPResponse, error)
+	// LookupAutnum queries the RDAP registry for an Autonomous System
+	// Number. The bootstrap file routes the query to the correct RIR.
+	LookupAutnum(context.Context, *ASN) (*RDAPAutnumResponse, error)
 	mustEmbedUnimplementedRDAPLookupServer()
 }
 
@@ -96,6 +115,9 @@ func (UnimplementedRDAPLookupServer) LookupIP(context.Context, *IP) (*RDAPRespon
 }
 func (UnimplementedRDAPLookupServer) LookupCIDR(context.Context, *CIDR) (*RDAPResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method LookupCIDR not implemented")
+}
+func (UnimplementedRDAPLookupServer) LookupAutnum(context.Context, *ASN) (*RDAPAutnumResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LookupAutnum not implemented")
 }
 func (UnimplementedRDAPLookupServer) mustEmbedUnimplementedRDAPLookupServer() {}
 func (UnimplementedRDAPLookupServer) testEmbeddedByValue()                    {}
@@ -154,6 +176,24 @@ func _RDAPLookup_LookupCIDR_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RDAPLookup_LookupAutnum_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ASN)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RDAPLookupServer).LookupAutnum(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RDAPLookup_LookupAutnum_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RDAPLookupServer).LookupAutnum(ctx, req.(*ASN))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RDAPLookup_ServiceDesc is the grpc.ServiceDesc for RDAPLookup service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -168,6 +208,10 @@ var RDAPLookup_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "LookupCIDR",
 			Handler:    _RDAPLookup_LookupCIDR_Handler,
+		},
+		{
+			MethodName: "LookupAutnum",
+			Handler:    _RDAPLookup_LookupAutnum_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -59,6 +59,44 @@ func (c *Client) LookupCIDR(ctx context.Context, cidr *pb.CIDR) (*pb.RDAPRespons
 	return c.query(ctx, fmt.Sprintf("%sip/%s/%d", baseURL, renderNetIP(netIP), prefix), baseURL)
 }
 
+// LookupAutnum queries the RDAP registry for an Autonomous System Number.
+func (c *Client) LookupAutnum(ctx context.Context, asn *pb.ASN) (*pb.RDAPAutnumResponse, error) {
+	baseURL, err := c.boot.ResolveASN(asn.GetNumber())
+	if err != nil {
+		return nil, err
+	}
+	return c.queryAutnum(ctx, fmt.Sprintf("%sautnum/%d", baseURL, asn.GetNumber()), baseURL)
+}
+
+func (c *Client) queryAutnum(ctx context.Context, queryURL, rdapServer string) (*pb.RDAPAutnumResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, queryURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/rdap+json, application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("RDAP GET %s: %w", queryURL, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading RDAP response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("RDAP server returned HTTP %d for %s: %s",
+			resp.StatusCode, queryURL, truncate(string(body), 200))
+	}
+
+	autnum, err := parseAutnum(body, rdapServer)
+	if err != nil {
+		return nil, fmt.Errorf("parsing RDAP autnum response: %w", err)
+	}
+	return &pb.RDAPAutnumResponse{Autnum: autnum, RawJson: string(body)}, nil
+}
+
 func (c *Client) query(ctx context.Context, queryURL, rdapServer string) (*pb.RDAPResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, queryURL, nil)
 	if err != nil {
@@ -269,6 +307,81 @@ func parseNetwork(body []byte, rdapServer string) (*pb.RDAPNetwork, error) {
 		RdapServer:      rdapServer,
 		ParentHandle:    r.ParentHandle,
 		CidrBlocks:      cidrBlocks,
+		RdapConformance: r.RDAPConformance,
+	}, nil
+}
+
+type autnumJSON struct {
+	Handle          string       `json:"handle"`
+	Name            string       `json:"name"`
+	Type            string       `json:"type"`
+	Country         string       `json:"country"`
+	StartAutnum     uint32       `json:"startAutnum"`
+	EndAutnum       uint32       `json:"endAutnum"`
+	Status          []string     `json:"status"`
+	Entities        []entityJSON `json:"entities"`
+	Events          []eventJSON  `json:"events"`
+	Links           []linkJSON   `json:"links"`
+	RDAPConformance []string     `json:"rdapConformance"`
+}
+
+func parseAutnum(body []byte, rdapServer string) (*pb.RDAPAutnum, error) {
+	var r autnumJSON
+	if err := json.Unmarshal(body, &r); err != nil {
+		return nil, err
+	}
+
+	entities := make([]*pb.RDAPEntity, 0, len(r.Entities))
+	for _, e := range r.Entities {
+		vc := parseVCard(e.VcardArray)
+		roles := make([]pb.RDAPRole, 0, len(e.Roles))
+		for _, rs := range e.Roles {
+			roles = append(roles, roleMap[rs])
+		}
+		entities = append(entities, &pb.RDAPEntity{
+			Handle:  e.Handle,
+			Fn:      vc.FN,
+			Roles:   roles,
+			Emails:  vc.Emails,
+			Kind:    entityKindMap[vc.Kind],
+			Org:     vc.Org,
+			Address: vc.Address,
+			Phone:   vc.Phone,
+		})
+	}
+
+	events := make([]*pb.RDAPEvent, 0, len(r.Events))
+	for _, ev := range r.Events {
+		events = append(events, &pb.RDAPEvent{
+			Action: eventActionMap[ev.EventAction],
+			Date:   ev.EventDate,
+		})
+	}
+
+	statuses := make([]pb.RDAPStatus, 0, len(r.Status))
+	for _, s := range r.Status {
+		statuses = append(statuses, statusMap[s])
+	}
+
+	links := make([]string, 0, len(r.Links))
+	for _, l := range r.Links {
+		if l.Href != "" {
+			links = append(links, l.Href)
+		}
+	}
+
+	return &pb.RDAPAutnum{
+		Handle:          r.Handle,
+		Name:            r.Name,
+		Type:            r.Type,
+		Country:         r.Country,
+		StartAutnum:     r.StartAutnum,
+		EndAutnum:       r.EndAutnum,
+		Status:          statuses,
+		Entities:        entities,
+		Events:          events,
+		Links:           links,
+		RdapServer:      rdapServer,
 		RdapConformance: r.RDAPConformance,
 	}, nil
 }
