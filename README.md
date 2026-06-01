@@ -142,6 +142,11 @@ prefer an authoritative geofeed when present; coordinates are filled from DB-IP.
 RPKI verification of geofeeds (RFC 9632 §3) and additional databases
 (IP2Location LITE, GeoLite2) are out of scope for this initial version.
 
+Candidate sources to add next — RIPE IPmap (measured infrastructure
+coordinates), more CC-licensed city DBs, RIR delegated stats — are surveyed
+with licensing and a recommendation in
+[docs/geo-sources.md](docs/geo-sources.md).
+
 ```bash
 bin/geo-client -addr localhost:50099 ip 8.8.8.8
 bin/geo-client -addr localhost:50099 cidr 1.1.1.0/24

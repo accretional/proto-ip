@@ -287,6 +287,13 @@ IP2Location LITE (CC-BY-**SA**, share-alike) and MaxMind GeoLite2
 The `geoip.Source` interface (`Lookup(ctx, netip.Addr) → *GeoSourceResult`,
 `Kind()`) makes adding them later a drop-in.
 
+A full survey of candidate sources (RIPE IPmap, IP2Location LITE, GeoLite2,
+`sapics/ip-location-db`, RIR delegated stats, IPtoASN, …) with licensing,
+formats, and a prioritised recommendation lives in
+[geo-sources.md](geo-sources.md). Top pick to add next: **RIPE IPmap** —
+measured, coordinate-bearing data for core infrastructure that complements the
+estimate-based DB-IP.
+
 ### Proto shape (`proto/ippb/geo.proto`)
 
 - `GeoLocation` — `optional double latitude/longitude` (optional so a real
