@@ -75,6 +75,9 @@ enum RDAPStatus {
   RDAP_STATUS_PENDING_TRANSFER = 16;
   RDAP_STATUS_PENDING_UPDATE = 17;
   RDAP_STATUS_PENDING_DELETE = 18;
+  // recover prohibited is used by some registries (e.g. AFNIC .fr) to
+  // indicate the domain cannot be recovered from pending-delete.
+  RDAP_STATUS_RECOVER_PROHIBITED = 19;
 }
 
 // RDAPEntityKind reflects the vCard KIND property (RFC 6350 §6.1.4).

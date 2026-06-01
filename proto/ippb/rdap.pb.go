@@ -262,6 +262,9 @@ const (
 	RDAPStatus_RDAP_STATUS_PENDING_TRANSFER    RDAPStatus = 16
 	RDAPStatus_RDAP_STATUS_PENDING_UPDATE      RDAPStatus = 17
 	RDAPStatus_RDAP_STATUS_PENDING_DELETE      RDAPStatus = 18
+	// recover prohibited is used by some registries (e.g. AFNIC .fr) to
+	// indicate the domain cannot be recovered from pending-delete.
+	RDAPStatus_RDAP_STATUS_RECOVER_PROHIBITED RDAPStatus = 19
 )
 
 // Enum value maps for RDAPStatus.
@@ -286,6 +289,7 @@ var (
 		16: "RDAP_STATUS_PENDING_TRANSFER",
 		17: "RDAP_STATUS_PENDING_UPDATE",
 		18: "RDAP_STATUS_PENDING_DELETE",
+		19: "RDAP_STATUS_RECOVER_PROHIBITED",
 	}
 	RDAPStatus_value = map[string]int32{
 		"RDAP_STATUS_UNKNOWN":             0,
@@ -307,6 +311,7 @@ var (
 		"RDAP_STATUS_PENDING_TRANSFER":    16,
 		"RDAP_STATUS_PENDING_UPDATE":      17,
 		"RDAP_STATUS_PENDING_DELETE":      18,
+		"RDAP_STATUS_RECOVER_PROHIBITED":  19,
 	}
 )
 
@@ -1188,7 +1193,7 @@ const file_proto_ippb_rdap_proto_rawDesc = "" +
 	".RDAP_EVENT_ACTION_LAST_UPDATE_OF_RDAP_DATABASE\x10\n" +
 	"\x12*\n" +
 	"&RDAP_EVENT_ACTION_REGISTRAR_EXPIRATION\x10\v\x120\n" +
-	",RDAP_EVENT_ACTION_ENUM_VALIDATION_EXPIRATION\x10\f*\xb7\x04\n" +
+	",RDAP_EVENT_ACTION_ENUM_VALIDATION_EXPIRATION\x10\f*\xdb\x04\n" +
 	"\n" +
 	"RDAPStatus\x12\x17\n" +
 	"\x13RDAP_STATUS_UNKNOWN\x10\x00\x12\x16\n" +
@@ -1210,7 +1215,8 @@ const file_proto_ippb_rdap_proto_rawDesc = "" +
 	"\x19RDAP_STATUS_PENDING_RENEW\x10\x0f\x12 \n" +
 	"\x1cRDAP_STATUS_PENDING_TRANSFER\x10\x10\x12\x1e\n" +
 	"\x1aRDAP_STATUS_PENDING_UPDATE\x10\x11\x12\x1e\n" +
-	"\x1aRDAP_STATUS_PENDING_DELETE\x10\x12*\xc6\x01\n" +
+	"\x1aRDAP_STATUS_PENDING_DELETE\x10\x12\x12\"\n" +
+	"\x1eRDAP_STATUS_RECOVER_PROHIBITED\x10\x13*\xc6\x01\n" +
 	"\x0eRDAPEntityKind\x12\x1c\n" +
 	"\x18RDAP_ENTITY_KIND_UNKNOWN\x10\x00\x12\x1f\n" +
 	"\x1bRDAP_ENTITY_KIND_INDIVIDUAL\x10\x01\x12\x1a\n" +
