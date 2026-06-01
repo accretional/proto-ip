@@ -55,7 +55,7 @@ fi
 export PATH="$GOBIN:$PATH"
 
 PROTO_DIR="proto/ippb"
-PROTO_FILES=("$PROTO_DIR"/ipv4.proto "$PROTO_DIR"/ipv6.proto "$PROTO_DIR"/ip.proto "$PROTO_DIR"/subnet.proto "$PROTO_DIR"/cidr.proto "$PROTO_DIR"/local_lookup.proto "$PROTO_DIR"/rdap.proto)
+PROTO_FILES=("$PROTO_DIR"/ipv4.proto "$PROTO_DIR"/ipv6.proto "$PROTO_DIR"/ip.proto "$PROTO_DIR"/subnet.proto "$PROTO_DIR"/cidr.proto "$PROTO_DIR"/local_lookup.proto "$PROTO_DIR"/rdap.proto "$PROTO_DIR"/geo.proto)
 
 # Detect whether any .proto is newer than its .pb.go (or stubs missing).
 NEED_REGEN=false
@@ -71,6 +71,9 @@ if [[ ! -f "$PROTO_DIR/local_lookup_grpc.pb.go" ]]; then
     NEED_REGEN=true
 fi
 if [[ ! -f "$PROTO_DIR/rdap_grpc.pb.go" ]]; then
+    NEED_REGEN=true
+fi
+if [[ ! -f "$PROTO_DIR/geo_grpc.pb.go" ]]; then
     NEED_REGEN=true
 fi
 
@@ -89,5 +92,47 @@ fi
 echo "  Running go mod tidy..."
 go mod tidy
 echo "  go mod tidy done"
+
+# --- DB-IP City Lite database (CC BY 4.0) -----------------------------------
+# Downloaded into a gitignored cache for the GeoLookup service. Idempotent:
+# skips if a current- or previous-month file already exists. A download
+# failure only WARNS — the geofeed source still works offline.
+GEO_DATA_DIR="data/geoip"
+mkdir -p "$GEO_DATA_DIR"
+
+# month_offset N -> YYYY-MM for N months ago, handling BSD (darwin) and GNU date.
+month_offset() {
+    local n="$1"
+    if date -v-"${n}"m +%Y-%m >/dev/null 2>&1; then
+        date -v-"${n}"m +%Y-%m          # BSD/macOS
+    else
+        date -d "${n} months ago" +%Y-%m # GNU/Linux
+    fi
+}
+
+THIS_MONTH=$(month_offset 0)
+LAST_MONTH=$(month_offset 1)
+
+if [[ -f "$GEO_DATA_DIR/dbip-city-lite-${THIS_MONTH}.mmdb" || \
+      -f "$GEO_DATA_DIR/dbip-city-lite-${LAST_MONTH}.mmdb" ]]; then
+    echo "  DB-IP City Lite DB present (skipping download)"
+else
+    echo "  Downloading DB-IP City Lite database…"
+    fetched=false
+    for M in "$THIS_MONTH" "$LAST_MONTH"; do
+        URL="https://download.db-ip.com/free/dbip-city-lite-${M}.mmdb.gz"
+        GZ="$GEO_DATA_DIR/dbip-city-lite-${M}.mmdb.gz"
+        if curl -fsSL -o "$GZ" "$URL"; then
+            gunzip -f "$GZ"
+            echo "  DB-IP City Lite ${M} downloaded to $GEO_DATA_DIR"
+            fetched=true
+            break
+        fi
+        rm -f "$GZ"
+    done
+    if ! $fetched; then
+        echo "  WARNING: DB-IP download failed; GeoLookup will run geofeed-only."
+    fi
+fi
 
 echo "=== setup.sh complete ==="

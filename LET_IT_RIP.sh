@@ -104,6 +104,60 @@ echo ""
 echo "  ✓ RDAP smoke tests passed"
 
 echo ""
+echo "=== Smoke test: GeoLookup server + client ==="
+
+GEO_PORT=50099
+echo "  Starting geo-server on port $GEO_PORT..."
+bin/geo-server -port "$GEO_PORT" -data-dir data/geoip &
+GEO_PID=$!
+
+# Give the server time to open the DB-IP DB and fetch the RDAP bootstrap.
+sleep 4
+if ! kill -0 "$GEO_PID" 2>/dev/null; then
+    echo "  ERROR: geo-server failed to start"
+    exit 1
+fi
+
+# Replace the trap with one that cleans up ALL servers started so far.
+geo_cleanup() {
+    echo "  Stopping servers..."
+    kill "$GEO_PID" "$RDAP_PID" "$SERVER_PID" 2>/dev/null || true
+    wait "$GEO_PID" "$RDAP_PID" "$SERVER_PID" 2>/dev/null || true
+}
+trap geo_cleanup EXIT
+
+echo "  Geo lookup: 8.8.8.8 (Google DNS, expect coordinates from DB-IP)..."
+GEO_OUT=$(bin/geo-client -addr "localhost:$GEO_PORT" ip 8.8.8.8)
+echo "$GEO_OUT"
+if ! echo "$GEO_OUT" | grep -qE 'coordinates: +-?[0-9]'; then
+    echo "  ✗ Expected lat/lon coordinates for 8.8.8.8"
+    exit 1
+fi
+echo "  ✓ Got coordinates for 8.8.8.8"
+echo ""
+
+echo "  Geo lookup: 1.1.1.1 (Cloudflare)..."
+bin/geo-client -addr "localhost:$GEO_PORT" ip 1.1.1.1
+echo ""
+
+# Geofeed coverage is operator-published and changes over time; this lookup is
+# best-effort and never fails the run if the feed is withdrawn. The Pfcloud /39
+# publishes an RFC 8805 geofeed via the RIPE `geofeed:` whois attribute, so a
+# healthy run shows BOTH a dbip_lite (coordinates) and an authoritative geofeed
+# (country/region) source merged into `best`.
+echo "  Geo lookup: 2a05:b0c6:a200::1 (RIPE geofeed publisher, best-effort)..."
+GEOFEED_OUT=$(bin/geo-client -addr "localhost:$GEO_PORT" ip 2a05:b0c6:a200::1 || true)
+echo "$GEOFEED_OUT"
+if echo "$GEOFEED_OUT" | grep -q 'source: *geofeed'; then
+    echo "  ✓ Authoritative geofeed source contributed"
+else
+    echo "  (no geofeed advertised for this prefix right now — best-effort, OK)"
+fi
+echo ""
+
+echo "  ✓ GeoLookup smoke tests passed"
+
+echo ""
 echo "=== Long fuzz pass (15s per grammar) ==="
 go test -run=NONE -fuzz=FuzzIPv4 -fuzztime=15s ./lang
 go test -run=NONE -fuzz=FuzzIPv6 -fuzztime=15s ./lang

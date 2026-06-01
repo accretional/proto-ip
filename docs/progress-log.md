@@ -92,3 +92,41 @@ Append-only notebook. Newest entries at the bottom.
   and APNIC (1.1.1.0/24) — correct RIR routing and structured response
   fields confirmed.
 - `LET_IT_RIP.sh` updated with RDAP smoke test section.
+
+## 2026-06-01
+
+- Added `GeoLookup` gRPC service for best-effort IP geolocation, combining
+  two free/open sources and merging them (most granular wins).
+- New `proto/ippb/geo.proto`: `GeoLocation` (optional lat/lon + admin fields +
+  `GeoGranularity`), `GeoSourceResult` (provenance/attribution/authoritative),
+  `GeoResponse` (`best` + per-source `sources`), service `GeoLookup`
+  (`LookupIP`, `LookupCIDR`), default port 50099.
+- New `geoip/` package:
+    - `geofeed_csv.go`: RFC 8805 CSV parser (5 cols, `#` comments incl. inline,
+      blank lines, missing trailing fields, malformed-row skip) + longest-prefix
+      match. Table-tested.
+    - `geofeed.go`: RFC 9632 geofeed discovery via TWO channels — inline
+      `Geofeed <url>` in the RDAP body (ARIN), and the RPSL `geofeed:`
+      attribute over whois port 43 (RIPE/APNIC, found via RDAP's `port43`).
+      The whois channel was added after confirming RDAP does NOT carry the URL
+      on RIPE (it only declares the `geofeed1` conformance) — without it the
+      source would be dead. Fetches+caches the CSV. No RPKI verification yet.
+      Verified live against the Pfcloud `2a05:b0c6:a200::/39` feed.
+    - `dbip.go`: DB-IP City Lite MMDB source via
+      `oschwald/maxminddb-golang/v2` (only new dep). Decodes the GeoIP2-City
+      schema; `(0,0)` → no coordinates.
+    - `merge.go`: pure merge — authoritative geofeed admin fields win,
+      coordinates filled from DB-IP, `best_source` = granularity contributor.
+    - `cache.go`, `source.go`, `server.go`.
+- New `cmd/geo-server` (port 50099, `-data-dir`) + `cmd/geo-client` (ip/cidr).
+- `setup.sh`: idempotent DB-IP City Lite download into gitignored `data/geoip/`
+  (current/previous month, warn-not-fail on failure); `geo.proto` registered.
+  `.gitignore` ignores `/data/`. `build.sh` builds the geo binaries.
+- Decisions confirmed with user: sources = geofeeds + DB-IP Lite (excluded
+  IP2Location LITE share-alike + GeoLite2 account-gating); download-at-setup
+  cache; merged-best-plus-per-source response.
+- Tests: CSV parser, longest-prefix, merge precedence/no-mutation, and a live
+  DB-IP decode (`8.8.8.8` → US + coords) that skips when the DB is absent. All
+  green. DB-IP 2026-06 fetched and verified locally.
+- README documents the service + the required DB-IP CC BY 4.0 attribution.
+- Next: optionally add geofeed RPKI verification and more source DBs.

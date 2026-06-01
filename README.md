@@ -19,8 +19,12 @@ validators that ride on
 | `lang/gluon_grammar_test.go` | Drives gluon's `Metaparser` gRPC service over bufconn. Asserts each grammar accepts/rejects a representative corpus. |
 | `lang/fuzz_test.go` | Cross-checks each grammar against `net.ParseIP` / `netip.ParseAddr` / `netip.ParsePrefix` as oracles. ~150–450k execs/sec depending on grammar. |
 | `localip/` | Reads local interfaces (rides on Go stdlib `net.Interfaces()`, which already wraps `/proc/net` on Linux and `getifaddrs(3)` on Darwin). Returns `[]*ippb.Interface`. |
+| `rdap/` | RDAP registration lookups (IP / CIDR / ASN), routed via the IANA bootstrap registry (RFC 7484). |
+| `geoip/` | Best-effort IP geolocation (`GeoLookup` service): RFC 8805 geofeeds discovered via RDAP (RFC 9632) + DB-IP City Lite for coordinates. See [IP geolocation](#ip-geolocation). |
 | `cmd/server/` | gRPC `LocalLookup` server (default port 50097). |
 | `cmd/client/` | Tiny CLI: `client interfaces` and `client ips`. Used by `LET_IT_RIP.sh`. |
+| `cmd/rdap-server/`, `cmd/rdap-client/` | `RDAPLookup` server (port 50098) + CLI. |
+| `cmd/geo-server/`, `cmd/geo-client/` | `GeoLookup` server (port 50099) + CLI. |
 | `setup.sh`, `build.sh`, `test.sh`, `LET_IT_RIP.sh` | Idempotent build/test/run scripts. **Never build, test, or run outside these scripts**, per [CLAUDE.md](CLAUDE.md). |
 | `docs/impl-notes.md` | Living design notes. |
 | `docs/progress-log.md` | Append-only journal. |
@@ -116,6 +120,38 @@ on `github.com/accretional/gluon` `main`:
    `sysctlip/` (Darwin) if a future requirement needs data stdlib
    doesn't surface (FIB LOCAL vs link, link-type detection beyond
    name patterns, etc.). Not needed today.
+
+## IP geolocation
+
+`GeoLookup` (package `geoip/`, `cmd/geo-server`, port 50099) does best-effort,
+multi-source IP geolocation. There is no single authoritative source, so it
+combines two free/open sources and merges them, preferring the most granular
+data available:
+
+| Source | Provides | Authority |
+|---|---|---|
+| **RFC 8805 geofeeds** (discovered via RDAP per RFC 9632) | country / region / city / postal — **no coordinates** | self-published by the network operator (high trust) |
+| **DB-IP City Lite** (MMDB) | the above **plus latitude/longitude** | aggregated estimate |
+
+A `GeoResponse` carries one merged `best` location plus the raw per-source
+results with provenance, so callers can see disagreement. Administrative fields
+prefer an authoritative geofeed when present; coordinates are filled from DB-IP.
+
+`setup.sh` downloads the current DB-IP City Lite MMDB into a gitignored
+`data/geoip/` cache; if the download fails the service still runs geofeed-only.
+RPKI verification of geofeeds (RFC 9632 §3) and additional databases
+(IP2Location LITE, GeoLite2) are out of scope for this initial version.
+
+```bash
+bin/geo-client -addr localhost:50099 ip 8.8.8.8
+bin/geo-client -addr localhost:50099 cidr 1.1.1.0/24
+```
+
+### Attribution
+
+This product includes **IP Geolocation data by [DB-IP](https://db-ip.com)**,
+licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Any
+deployment that displays DB-IP-derived results must preserve this attribution.
 
 ## References
 

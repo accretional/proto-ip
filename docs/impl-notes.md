@@ -262,6 +262,106 @@ decimal, not `::ffff:...` notation.
 | LocalLookup | 50097 |
 | RDAPLookup | 50098 |
 
+## GeoLookup service (IP geolocation)
+
+### Goal
+
+Best-effort IP → physical location, returning the most granular data
+available (ideally lat/lon) while being honest about gaps. No single
+authoritative source exists, so we combine and merge several.
+
+### Sources (v1)
+
+| Source | Granularity | Authority | License | Pkg |
+|---|---|---|---|---|
+| RFC 8805/9632 geofeeds | country/region/city/postal (NO coords) | operator self-published | per-publisher | `geoip/geofeed.go` |
+| DB-IP City Lite (MMDB) | + lat/lon | aggregated estimate | CC BY 4.0 | `geoip/dbip.go` |
+
+**Key fact:** RFC 8805 geofeeds carry no coordinates — only country
+(ISO 3166-1), region (ISO 3166-2), city, postal. So coordinates always come
+from DB-IP; geofeeds contribute authoritative admin fields. This drives the
+merge policy.
+
+IP2Location LITE (CC-BY-**SA**, share-alike) and MaxMind GeoLite2
+(account-gated, redistribution-restricted) were deliberately excluded from v1.
+The `geoip.Source` interface (`Lookup(ctx, netip.Addr) → *GeoSourceResult`,
+`Kind()`) makes adding them later a drop-in.
+
+### Proto shape (`proto/ippb/geo.proto`)
+
+- `GeoLocation` — `optional double latitude/longitude` (optional so a real
+  `0,0` is distinguishable from absent), country, region, city, postal_code,
+  time_zone, `GeoGranularity` (COUNTRY < REGION < CITY < COORDINATES).
+- `GeoSourceResult` — source, location, matched_prefix, `authoritative`
+  (true for geofeeds), `attribution` (license credit).
+- `GeoResponse` — `best` (merged) + `best_source` + repeated `sources`.
+- Service `GeoLookup` — unary `LookupIP(IP)` / `LookupCIDR(CIDR)`. Port 50099.
+
+### Merge policy (`geoip/merge.go`, pure + unit-tested)
+
+1. Base = result with highest granularity.
+2. Admin fields (country/region/city/postal) prefer the first authoritative
+   (geofeed) result.
+3. Coordinates + time_zone filled from the first coordinate-bearing result
+   (→ DB-IP) if the base lacks them; granularity upgrades to COORDINATES.
+4. `best_source` = the coordinate provider when `best` ends up with coords,
+   else the base source.
+
+### Geofeed discovery (RFC 9632)
+
+Empirically, the major RIRs differ on where the geofeed URL lives, so
+`geoip/geofeed.go:discover` tries two channels (one `geofeedURLRe` regex
+matches all forms across both):
+
+1. **RDAP body** — ARIN-style `Geofeed <url>` remarks appear inline in the
+   RDAP JSON we already fetch via `rdap.Client.LookupIP`.
+2. **RPSL whois (port 43)** — RFC 9632's *normative* location is the
+   inetnum `geofeed:` attribute. **RIPE/APNIC serve this over whois and do
+   NOT echo it into RDAP** (RDAP only declares the `geofeed1` conformance, not
+   the URL). The RDAP response's `port43` field gives the whois host, so we
+   do one `whoisQuery` (RFC 3912: dial :43, send `<ip>\r\n`, read) and regex
+   the result.
+
+Verified live: `2a05:b0c6:a200::1` (Pfcloud /39) →
+`geofeed: https://api.geofeed.space/pfcloud/geofeed.csv` via RIPE whois → the
+authoritative geofeed supplies `region=NL-LI` (which DB-IP City Lite lacks)
+while DB-IP supplies coordinates; both merge into `best`.
+
+Fetched CSVs are cached in-memory with a 1h TTL (`geoip/cache.go`); discovery
+itself is not cached in v1. RPKI authentication of the feed (RFC 9632 §3) is
+**not** implemented — `authoritative` means "self-published", not
+"cryptographically verified". Discovery uses the most-specific whois object
+only; walking up to a less-specific parent that carries the geofeed is future
+work.
+
+> Note: this whois channel is a deliberate addition beyond the originally
+> approved RDAP-only plan, made after confirming RDAP does not carry the URL
+> on RIPE — without it the geofeed source would be effectively dead.
+
+### MMDB reader
+
+`github.com/oschwald/maxminddb-golang/v2` (the only new dependency). v2 API:
+`maxminddb.Open(path)` → `db.Lookup(netip.Addr)` → `Result.{Err,Found,Decode,Prefix}`.
+DB-IP City Lite uses the GeoIP2-City schema, so we decode into a minimal struct
+(`country.iso_code`, `subdivisions[].iso_code`, `city.names.en`,
+`location.{latitude,longitude,time_zone}`, `postal.code`). `(0,0)` is treated as
+"no coordinates" (Null Island, not a real estimate).
+
+### DB acquisition
+
+`setup.sh` downloads `https://download.db-ip.com/free/dbip-city-lite-YYYY-MM.mmdb.gz`
+into gitignored `data/geoip/` (tries current then previous month; idempotent;
+download failure only warns). `geoip.FindDBIPDatabase(dir)` globs for the newest
+`dbip-city-lite-*.mmdb`. **Attribution is a license requirement** (CC BY 4.0):
+credited in `README.md`, the `DBIPAttribution` constant, and `geo-client` output.
+
+### Address conversion
+
+`server.go:addrFromProto` reconstructs a `netip.Addr` from the two sint64 halves
+and `.Unmap()`s v4-mapped. `geofeed.go:protoFromAddr` does the reverse
+(`netip.Addr.As16()` yields the v4-in-v6 mapped form matching the wire format)
+to feed `rdap.Client`.
+
 ## Open questions
 
 - IPv6 "::ffff:1.2.3.4" v4-mapped form — should it route through the

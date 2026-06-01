@@ -1,0 +1,84 @@
+syntax = "proto3";
+
+package ip;
+
+option go_package = "github.com/accretional/proto-ip/proto/ippb;ippb";
+
+import "proto/ippb/ip.proto";
+import "proto/ippb/cidr.proto";
+
+// GeoSource identifies which data source produced a geolocation result.
+// proto-ip combines authoritative-but-coarse self-published geofeeds with
+// the coordinate-bearing DB-IP City Lite database.
+enum GeoSource {
+  GEO_SOURCE_UNKNOWN = 0;
+  // RFC 8805 geofeed, discovered per RFC 9632 (self-published by the
+  // network operator; high trust, but no coordinates).
+  GEO_SOURCE_GEOFEED = 1;
+  // DB-IP City Lite (CC BY 4.0). Aggregated estimate; carries lat/lon.
+  GEO_SOURCE_DBIP_LITE = 2;
+}
+
+// GeoGranularity ranks how specific a location is, so the merge logic can
+// pick the most precise result available. COORDINATES is the finest.
+enum GeoGranularity {
+  GEO_GRANULARITY_UNKNOWN = 0;
+  GEO_GRANULARITY_COUNTRY = 1;
+  GEO_GRANULARITY_REGION = 2;
+  GEO_GRANULARITY_CITY = 3;
+  GEO_GRANULARITY_COORDINATES = 4;
+}
+
+// GeoLocation is a single physical-location estimate for an IP address.
+// Coordinates are optional so a present "0,0" is distinguishable from
+// "no coordinates available" (geofeeds never carry coordinates).
+message GeoLocation {
+  optional double latitude = 1;
+  optional double longitude = 2;
+  // ISO 3166-1 alpha-2 country code (e.g. "US").
+  string country = 3;
+  // ISO 3166-2 region/subdivision code (e.g. "US-CA").
+  string region = 4;
+  string city = 5;
+  string postal_code = 6;
+  // IANA time zone (e.g. "America/Los_Angeles") when the source provides it.
+  string time_zone = 7;
+  GeoGranularity granularity = 8;
+}
+
+// GeoSourceResult is one source's answer for a query, with provenance.
+message GeoSourceResult {
+  GeoSource source = 1;
+  GeoLocation location = 2;
+  // The CIDR prefix the matched record applies to (e.g. "8.8.8.0/24").
+  string matched_prefix = 3;
+  // True when the data is self-published by the network operator (geofeeds).
+  // Note: v1 does not cryptographically verify geofeeds (RFC 9632 RPKI
+  // scheme), so this reflects "self-published", not "verified".
+  bool authoritative = 4;
+  // Required attribution / license credit string for this source.
+  string attribution = 5;
+}
+
+// GeoResponse is the result of a geolocation lookup: one merged best-effort
+// location plus every per-source result for transparency.
+message GeoResponse {
+  // Best-effort merged location: the most granular data available, with
+  // coordinates filled from DB-IP and administrative fields preferring an
+  // authoritative geofeed when present.
+  GeoLocation best = 1;
+  // Which source contributed the chosen granularity of `best`.
+  GeoSource best_source = 2;
+  // Every source that returned a result, in lookup order.
+  repeated GeoSourceResult sources = 3;
+}
+
+// GeoLookup performs best-effort IP geolocation by combining multiple free
+// and open data sources. It returns the most granular location available
+// (ideally latitude/longitude) and is explicit about gaps and disagreement.
+service GeoLookup {
+  // LookupIP geolocates a single IP address.
+  rpc LookupIP(IP) returns (GeoResponse);
+  // LookupCIDR geolocates a CIDR block (uses the network address).
+  rpc LookupCIDR(CIDR) returns (GeoResponse);
+}
