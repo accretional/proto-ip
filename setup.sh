@@ -135,4 +135,21 @@ else
     fi
 fi
 
+# --- RIPE IPmap infrastructure geolocations (RIPE NCC ToS) ------------------
+# Measured locations for core infrastructure (routers/IXPs), refreshed daily.
+# Kept bzip2-compressed (~5 MB); decoded in-process. Re-downloaded only when
+# the cached copy is missing or older than 7 days. Failure only WARNS.
+IPMAP_FILE="$GEO_DATA_DIR/ipmap-geolocations-latest.csv.bz2"
+if [[ -n "$(find "$GEO_DATA_DIR" -name 'ipmap-geolocations-latest.csv.bz2' -mtime -7 2>/dev/null)" ]]; then
+    echo "  RIPE IPmap dump present and fresh (skipping download)"
+else
+    echo "  Downloading RIPE IPmap geolocations…"
+    if curl -fsSL --max-time 120 -o "$IPMAP_FILE" "https://ftp.ripe.net/ripe/ipmap/geolocations-latest"; then
+        echo "  RIPE IPmap downloaded to $GEO_DATA_DIR"
+    else
+        rm -f "$IPMAP_FILE"
+        echo "  WARNING: RIPE IPmap download failed; that source will be disabled."
+    fi
+fi
+
 echo "=== setup.sh complete ==="

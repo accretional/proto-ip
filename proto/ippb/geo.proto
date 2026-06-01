@@ -17,6 +17,9 @@ enum GeoSource {
   GEO_SOURCE_GEOFEED = 1;
   // DB-IP City Lite (CC BY 4.0). Aggregated estimate; carries lat/lon.
   GEO_SOURCE_DBIP_LITE = 2;
+  // RIPE IPmap (RIPE NCC ToS). Measured geolocation of core Internet
+  // infrastructure (routers, IXPs); exact-IP, carries lat/lon.
+  GEO_SOURCE_IPMAP = 3;
 }
 
 // GeoGranularity ranks how specific a location is, so the merge logic can

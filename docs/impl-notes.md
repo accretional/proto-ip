@@ -276,6 +276,7 @@ authoritative source exists, so we combine and merge several.
 |---|---|---|---|---|
 | RFC 8805/9632 geofeeds | country/region/city/postal (NO coords) | operator self-published | per-publisher | `geoip/geofeed.go` |
 | DB-IP City Lite (MMDB) | + lat/lon | aggregated estimate | CC BY 4.0 | `geoip/dbip.go` |
+| RIPE IPmap | country/city + lat/lon (exact-IP only) | measured (Atlas) | RIPE NCC ToS | `geoip/ipmap.go` |
 
 **Key fact:** RFC 8805 geofeeds carry no coordinates — only country
 (ISO 3166-1), region (ISO 3166-2), city, postal. So coordinates always come
@@ -344,6 +345,31 @@ work.
 > Note: this whois channel is a deliberate addition beyond the originally
 > approved RDAP-only plan, made after confirming RDAP does not carry the URL
 > on RIPE — without it the geofeed source would be effectively dead.
+
+### RIPE IPmap source (`geoip/ipmap.go`)
+
+Measured locations for core infrastructure from the RIPE IPmap daily dump
+(`https://ftp.ripe.net/ripe/ipmap/geolocations-latest`). Specifics:
+
+- The dump is **exact-IP only** (`/32` and `/128`, ~600k rows), so the source
+  answers only when the queried address is itself a known node — sparse for
+  end-user IPs, but measured (not estimated) for the infra it covers.
+- Loaded into a `map[netip.Addr]ipmapEntry` at startup. The file is kept
+  **bzip2-compressed** in the cache (~5 MB) and decoded in-process via Go's
+  `compress/bzip2` (no `bunzip2` CLI dependency; the real-dump test asserts the
+  full multi-stream file decodes by requiring >400k loaded rows).
+- CSV columns: `prefix,geolocation_id,city,state,country_name,cc2,cc3,lat,lon,score`.
+  `country_name` is **unquoted and may contain commas** (e.g. "Bonaire, Saint
+  Eustatius and Saba"), so numeric/code fields are read by **offset from the end**
+  of the row; `city` stays at index 2 (geolocation_id has no comma).
+- `region` is left empty: IPmap's `state` is a name, not an ISO 3166-2 code.
+- `score` is a **relative sort factor, not accuracy** (RIPE docs), so it is not
+  surfaced; weighting sources by confidence is a documented follow-up.
+- **Ordering:** geo-server lists IPmap *before* DB-IP, so on a granularity tie
+  (both COORDINATES) the merge keeps IPmap's measured coordinates as `best`.
+  Verified live: `1.1.1.1` → IPmap "Johannesburg" wins over DB-IP "Sydney".
+
+See [geo-sources.md](geo-sources.md) for the full source survey.
 
 ### MMDB reader
 

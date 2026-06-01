@@ -130,3 +130,27 @@ Append-only notebook. Newest entries at the bottom.
   green. DB-IP 2026-06 fetched and verified locally.
 - README documents the service + the required DB-IP CC BY 4.0 attribution.
 - Next: optionally add geofeed RPKI verification and more source DBs.
+
+## 2026-06-01 (geo data-source survey + RIPE IPmap)
+
+- Wrote `docs/geo-sources.md`: surveyed candidate free/open geolocation
+  sources (RIPE IPmap, IP2Location LITE, GeoLite2, sapics/ip-location-db,
+  IPLocate, IPinfo Lite, IPtoASN, RIR delegated stats) with granularity,
+  coverage, licensing, formats, and a prioritised recommendation. Linked from
+  README + impl-notes.
+- Implemented the top recommendation: **RIPE IPmap** source (`geoip/ipmap.go`).
+    - Measured locations for core infrastructure; daily dump
+      `ftp.ripe.net/ripe/ipmap/geolocations-latest`. Exact-IP only (/32,/128),
+      ~600k rows. Loaded into a `map[netip.Addr]` at startup.
+    - Kept bzip2-compressed in cache (~5 MB); decoded in-process via
+      `compress/bzip2` (no CLI dep). Real-dump test asserts >400k rows load.
+    - CSV parsed by right-offset because `country_name` is unquoted and may
+      contain commas ("Bonaire, Saint Eustatius and Saba").
+    - New `GEO_SOURCE_IPMAP` enum value; `region` left empty (IPmap state is a
+      name, not ISO 3166-2); `score` not surfaced (it is a relative sort
+      factor, not accuracy — confidence weighting is a documented follow-up).
+    - geo-server lists IPmap before DB-IP so its measured coords win ties.
+      Verified live: 1.1.1.1 → IPmap "Johannesburg" wins over DB-IP "Sydney".
+    - `setup.sh` downloads the dump (re-fetch if missing/>7d old; warn-not-fail).
+- Tests: parse (incl. comma-in-country + malformed skip), lookup hit/miss, and
+  a live real-dump test (skips if absent). All green.

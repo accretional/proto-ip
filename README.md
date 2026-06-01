@@ -132,19 +132,21 @@ data available:
 |---|---|---|
 | **RFC 8805 geofeeds** (discovered via RDAP per RFC 9632) | country / region / city / postal — **no coordinates** | self-published by the network operator (high trust) |
 | **DB-IP City Lite** (MMDB) | the above **plus latitude/longitude** | aggregated estimate |
+| **RIPE IPmap** (daily dump) | country / city **plus latitude/longitude**, exact-IP only | measured via RIPE Atlas (core infrastructure) |
 
 A `GeoResponse` carries one merged `best` location plus the raw per-source
 results with provenance, so callers can see disagreement. Administrative fields
 prefer an authoritative geofeed when present; coordinates are filled from DB-IP.
 
-`setup.sh` downloads the current DB-IP City Lite MMDB into a gitignored
-`data/geoip/` cache; if the download fails the service still runs geofeed-only.
-RPKI verification of geofeeds (RFC 9632 §3) and additional databases
-(IP2Location LITE, GeoLite2) are out of scope for this initial version.
+`setup.sh` downloads the DB-IP City Lite MMDB and the RIPE IPmap daily dump
+into a gitignored `data/geoip/` cache; any download that fails is skipped and
+the remaining sources still run. When multiple sources return coordinates,
+IPmap's measured data is preferred over DB-IP's estimate. RPKI verification of
+geofeeds (RFC 9632 §3) and additional databases (IP2Location LITE, GeoLite2)
+are out of scope for now.
 
-Candidate sources to add next — RIPE IPmap (measured infrastructure
-coordinates), more CC-licensed city DBs, RIR delegated stats — are surveyed
-with licensing and a recommendation in
+Further candidate sources — more CC-licensed city DBs, RIR delegated stats,
+IPtoASN — are surveyed with licensing and a recommendation in
 [docs/geo-sources.md](docs/geo-sources.md).
 
 ```bash

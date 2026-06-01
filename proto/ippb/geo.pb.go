@@ -33,6 +33,9 @@ const (
 	GeoSource_GEO_SOURCE_GEOFEED GeoSource = 1
 	// DB-IP City Lite (CC BY 4.0). Aggregated estimate; carries lat/lon.
 	GeoSource_GEO_SOURCE_DBIP_LITE GeoSource = 2
+	// RIPE IPmap (RIPE NCC ToS). Measured geolocation of core Internet
+	// infrastructure (routers, IXPs); exact-IP, carries lat/lon.
+	GeoSource_GEO_SOURCE_IPMAP GeoSource = 3
 )
 
 // Enum value maps for GeoSource.
@@ -41,11 +44,13 @@ var (
 		0: "GEO_SOURCE_UNKNOWN",
 		1: "GEO_SOURCE_GEOFEED",
 		2: "GEO_SOURCE_DBIP_LITE",
+		3: "GEO_SOURCE_IPMAP",
 	}
 	GeoSource_value = map[string]int32{
 		"GEO_SOURCE_UNKNOWN":   0,
 		"GEO_SOURCE_GEOFEED":   1,
 		"GEO_SOURCE_DBIP_LITE": 2,
+		"GEO_SOURCE_IPMAP":     3,
 	}
 )
 
@@ -416,11 +421,12 @@ const file_proto_ippb_geo_proto_rawDesc = "" +
 	"\x04best\x18\x01 \x01(\v2\x0f.ip.GeoLocationR\x04best\x12.\n" +
 	"\vbest_source\x18\x02 \x01(\x0e2\r.ip.GeoSourceR\n" +
 	"bestSource\x12-\n" +
-	"\asources\x18\x03 \x03(\v2\x13.ip.GeoSourceResultR\asources*U\n" +
+	"\asources\x18\x03 \x03(\v2\x13.ip.GeoSourceResultR\asources*k\n" +
 	"\tGeoSource\x12\x16\n" +
 	"\x12GEO_SOURCE_UNKNOWN\x10\x00\x12\x16\n" +
 	"\x12GEO_SOURCE_GEOFEED\x10\x01\x12\x18\n" +
-	"\x14GEO_SOURCE_DBIP_LITE\x10\x02*\xa1\x01\n" +
+	"\x14GEO_SOURCE_DBIP_LITE\x10\x02\x12\x14\n" +
+	"\x10GEO_SOURCE_IPMAP\x10\x03*\xa1\x01\n" +
 	"\x0eGeoGranularity\x12\x1b\n" +
 	"\x17GEO_GRANULARITY_UNKNOWN\x10\x00\x12\x1b\n" +
 	"\x17GEO_GRANULARITY_COUNTRY\x10\x01\x12\x1a\n" +

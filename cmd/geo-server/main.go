@@ -30,6 +30,18 @@ func main() {
 
 	var sources []geoip.Source
 
+	// RIPE IPmap source (optional). Listed first so its measured coordinates
+	// win granularity ties over the estimate-based DB-IP for the infrastructure
+	// addresses it covers.
+	if path, err := geoip.FindIPMapDatabase(*dataDir); err != nil {
+		log.Printf("RIPE IPmap dump unavailable (%v)", err)
+	} else if src, err := geoip.NewIPMapSource(path); err != nil {
+		log.Printf("loading RIPE IPmap: %v", err)
+	} else {
+		log.Printf("RIPE IPmap source loaded from %s (%d addresses)", path, src.Len())
+		sources = append(sources, src)
+	}
+
 	// DB-IP coordinate source (optional — geofeed-only if absent).
 	if path, err := geoip.FindDBIPDatabase(*dataDir); err != nil {
 		log.Printf("DB-IP database unavailable (%v); running without coordinates", err)

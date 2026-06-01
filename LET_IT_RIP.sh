@@ -136,8 +136,14 @@ fi
 echo "  ✓ Got coordinates for 8.8.8.8"
 echo ""
 
-echo "  Geo lookup: 1.1.1.1 (Cloudflare)..."
-bin/geo-client -addr "localhost:$GEO_PORT" ip 1.1.1.1
+echo "  Geo lookup: 1.1.1.1 (Cloudflare; often covered by RIPE IPmap)..."
+ONE_OUT=$(bin/geo-client -addr "localhost:$GEO_PORT" ip 1.1.1.1)
+echo "$ONE_OUT"
+if echo "$ONE_OUT" | grep -q 'source: *ipmap'; then
+    echo "  ✓ RIPE IPmap (measured infrastructure) source contributed"
+else
+    echo "  (1.1.1.1 not in this IPmap dump revision — best-effort, OK)"
+fi
 echo ""
 
 # Geofeed coverage is operator-published and changes over time; this lookup is
