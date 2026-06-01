@@ -183,6 +183,8 @@ var statusMap = map[string]pb.RDAPStatus{
 	"pending transfer":    pb.RDAPStatus_RDAP_STATUS_PENDING_TRANSFER,
 	"pending update":      pb.RDAPStatus_RDAP_STATUS_PENDING_UPDATE,
 	"pending delete":      pb.RDAPStatus_RDAP_STATUS_PENDING_DELETE,
+	"server recover prohibited": pb.RDAPStatus_RDAP_STATUS_RECOVER_PROHIBITED,
+	"client recover prohibited": pb.RDAPStatus_RDAP_STATUS_RECOVER_PROHIBITED,
 }
 
 var entityKindMap = map[string]pb.RDAPEntityKind{
