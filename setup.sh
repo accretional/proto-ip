@@ -192,4 +192,43 @@ for entry in "${GEO_SOURCES[@]}"; do
     fetch_geo_source "$s_name" "$s_url" "$s_dest" "$s_fresh" "$s_post"
 done
 
+# --- IP2Location LITE DB5 (OPTIONAL, opt-in) — CC BY-SA 4.0 -----------------
+# Kept separate from the manifest because it is credentialed: it needs a free
+# IP2Location LITE token and ships as a ZIP. Enable by exporting
+# IP2LOCATION_TOKEN before running setup. Not redistributed (the gitignored
+# cache holds it), so the CC BY-SA share-alike term imposes no extra burden;
+# attribution is still required and is carried in the GeoSourceResult.
+fetch_ip2location() {  # file_code dest_name zip_member
+    local code="$1" dest="$2" member="$3"
+    if [[ -n "$(find "$GEO_DATA_DIR" -name "$dest" -mtime -25 2>/dev/null)" ]]; then
+        echo "  IP2Location LITE $code present and fresh (skipping download)"
+        return 0
+    fi
+    echo "  Downloading IP2Location LITE ${code}…"
+    local zip="$GEO_DATA_DIR/${dest}.zip"
+    # IP2Location returns HTTP 200 with a text error body for a bad token or an
+    # exceeded quota, so unzip failure (below) is the real success signal.
+    if curl -fsSL --max-time 180 -o "$zip" \
+        "https://www.ip2location.com/download/?token=${IP2LOCATION_TOKEN}&file=${code}"; then
+        if unzip -o -j "$zip" "$member" -d "$GEO_DATA_DIR" >/dev/null 2>&1; then
+            mv -f "$GEO_DATA_DIR/$member" "$GEO_DATA_DIR/$dest"
+            rm -f "$zip"
+            echo "  IP2Location LITE $code downloaded to $GEO_DATA_DIR"
+        else
+            rm -f "$zip"
+            echo "  WARNING: IP2Location $code not a valid ZIP (bad token or quota?); skipping."
+        fi
+    else
+        rm -f "$zip"
+        echo "  WARNING: IP2Location $code download failed; skipping."
+    fi
+}
+
+if [[ -n "${IP2LOCATION_TOKEN:-}" ]]; then
+    fetch_ip2location DB5LITECSV     ip2location-lite-db5.csv      'IP2LOCATION-LITE-DB5.CSV'
+    fetch_ip2location DB5LITECSVIPV6 ip2location-lite-db5-ipv6.csv 'IP2LOCATION-LITE-DB5.IPV6.CSV'
+else
+    echo "  IP2Location LITE (optional): export IP2LOCATION_TOKEN to enable this source"
+fi
+
 echo "=== setup.sh complete ==="

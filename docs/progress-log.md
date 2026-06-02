@@ -161,3 +161,31 @@ Append-only notebook. Newest entries at the bottom.
   Adding a file-based source is now one row. Verified both download and
   idempotent-skip paths for both sources (exit 0). (Gotcha fixed: `$name…` with
   the UTF-8 ellipsis tripped `set -u` parsing → use `${name}…`.)
+
+## 2026-06-01 (IP2Location LITE opt-in source)
+
+- Added IP2Location LITE DB5 as an **optional, opt-in** source
+  (`geoip/ip2location.go`), a second whole-space coordinate estimate alongside
+  DB-IP. New `GEO_SOURCE_IP2LOCATION_LITE` enum.
+- Implemented from **CSV**, not the proprietary `.BIN` reader (per request — no
+  proprietary-format dependency). DB5 columns parsed with `encoding/csv`;
+  `ip_from`/`ip_to` are decimal integer ranges (32-bit v4, up to 128-bit v6 via
+  `math/big`), stored as per-family sorted `netip.Addr` ranges and resolved by
+  binary search. `matched_prefix` rendered as `start-end` (not a CIDR).
+  `region` left empty (region_name is a name, not ISO 3166-2); `(0,0)` → no
+  coords.
+- Opt-in plumbing: token-gated. `setup.sh` downloads the v4+v6 DB5 CSV ZIPs only
+  when `IP2LOCATION_TOKEN` is exported, unzips the CSV members to stable cache
+  names (unzip failure = bad-token/quota signal). geo-server loads the source
+  only if the CSVs are present (`FindIP2LocationDatabases`).
+- Licensing rationale captured: CC-BY-SA share-alike adds no burden under our
+  download-at-setup / no-redistribution pattern; only attribution applies (in
+  the per-source result + README). Documented the invariant: no bulk-dump of
+  SA-sourced data. See geo-sources.md.
+- Tests: CSV parse (v4), range boundary/gap/miss, 0,0-coords handling, and v6
+  range lookup (decimals generated programmatically). Verified end-to-end with
+  a synthetic DB5 CSV: server loads the source and it appears in per-source
+  output for 8.8.8.8 with CC-BY-SA attribution. All green via test.sh.
+- (Caught a stale-binary gotcha: enum printed as "4" until geo-client was
+  rebuilt after the proto regen; build.sh/test.sh rebuild both, so normal
+  flow is unaffected.)

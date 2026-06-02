@@ -20,6 +20,9 @@ enum GeoSource {
   // RIPE IPmap (RIPE NCC ToS). Measured geolocation of core Internet
   // infrastructure (routers, IXPs); exact-IP, carries lat/lon.
   GEO_SOURCE_IPMAP = 3;
+  // IP2Location LITE DB5 (CC BY-SA 4.0). Optional, opt-in whole-space
+  // estimate from CSV; carries lat/lon. Aggregated like DB-IP.
+  GEO_SOURCE_IP2LOCATION_LITE = 4;
 }
 
 // GeoGranularity ranks how specific a location is, so the merge logic can

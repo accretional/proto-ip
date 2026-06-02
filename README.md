@@ -133,6 +133,7 @@ data available:
 | **RFC 8805 geofeeds** (discovered via RDAP per RFC 9632) | country / region / city / postal — **no coordinates** | self-published by the network operator (high trust) |
 | **DB-IP City Lite** (MMDB) | the above **plus latitude/longitude** | aggregated estimate |
 | **RIPE IPmap** (daily dump) | country / city **plus latitude/longitude**, exact-IP only | measured via RIPE Atlas (core infrastructure) |
+| **IP2Location LITE DB5** (CSV, *opt-in*) | country / city **plus latitude/longitude** | aggregated estimate (enable with `IP2LOCATION_TOKEN`) |
 
 A `GeoResponse` carries one merged `best` location plus the raw per-source
 results with provenance, so callers can see disagreement. Administrative fields
@@ -141,9 +142,10 @@ prefer an authoritative geofeed when present; coordinates are filled from DB-IP.
 `setup.sh` downloads the DB-IP City Lite MMDB and the RIPE IPmap daily dump
 into a gitignored `data/geoip/` cache; any download that fails is skipped and
 the remaining sources still run. When multiple sources return coordinates,
-IPmap's measured data is preferred over DB-IP's estimate. RPKI verification of
-geofeeds (RFC 9632 §3) and additional databases (IP2Location LITE, GeoLite2)
-are out of scope for now.
+IPmap's measured data is preferred over the estimate DBs. **IP2Location LITE**
+is an optional extra estimate source — export `IP2LOCATION_TOKEN` (a free
+IP2Location LITE account token) before `setup.sh` to download its CSVs.
+RPKI verification of geofeeds (RFC 9632 §3) and GeoLite2 remain out of scope.
 
 Further candidate sources — more CC-licensed city DBs, RIR delegated stats,
 IPtoASN — are surveyed with licensing and a recommendation in
@@ -159,6 +161,12 @@ bin/geo-client -addr localhost:50099 cidr 1.1.1.0/24
 This product includes **IP Geolocation data by [DB-IP](https://db-ip.com)**,
 licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Any
 deployment that displays DB-IP-derived results must preserve this attribution.
+
+When the optional IP2Location source is enabled, deployments must also credit
+**IP2Location LITE** ([CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/),
+data from <https://lite.ip2location.com>). RIPE IPmap data is used under the
+RIPE NCC Terms of Service. Each source's attribution is carried in its
+per-source result and printed by `geo-client`.
 
 ## References
 

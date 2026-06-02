@@ -52,6 +52,17 @@ func main() {
 		sources = append(sources, src)
 	}
 
+	// IP2Location LITE (optional, opt-in; CC BY-SA 4.0). Loaded only when the
+	// CSVs are present in the cache (downloaded by setup.sh given a token).
+	if v4, v6, ok := geoip.FindIP2LocationDatabases(*dataDir); ok {
+		if src, err := geoip.NewIP2LocationSource(v4, v6); err != nil {
+			log.Printf("loading IP2Location LITE: %v", err)
+		} else {
+			log.Printf("IP2Location LITE source loaded (%s)", src.Summary())
+			sources = append(sources, src)
+		}
+	}
+
 	// Geofeed source via the IANA RDAP bootstrap registry.
 	log.Println("Fetching IANA RDAP bootstrap registry…")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

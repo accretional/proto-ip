@@ -58,17 +58,21 @@ covers it is often more trustworthy than an aggregated DB.
   (`geoip/ipmap.go`), download in `setup.sh` alongside DB-IP. Granularity
   `COORDINATES`; `authoritative=false` but high practical trust for infra.
 
-### IP2Location LITE (DB5 / DB11)
+### IP2Location LITE (DB5 / DB11) — **INTEGRATED (opt-in)**
 
 - **Granularity** — country/region/city **+ lat/lon** (DB5); DB11 adds postal +
-  IANA timezone. Full-range coverage (prefix ranges), comparable to DB-IP.
-- **License** — **CC-BY-SA 4.0** (share-alike). Attribution **and** derivatives
-  must carry the same license — see [Licensing](#licensing-considerations).
-- **Format** — proprietary `.BIN` (needs the IP2Location Go reader) or CSV.
-  Monthly; free signup/token for direct download.
-- **Fit** — second whole-space coordinate DB; good for cross-checking DB-IP and
-  filling its gaps (its region/postal coverage is often better). The share-alike
-  license is the main reason it was deferred from v1.
+  IANA timezone. Full-range coverage (integer ranges), comparable to DB-IP.
+- **License** — **CC-BY-SA 4.0** (share-alike). Imposes no extra burden here
+  because we do not redistribute the DB or a derived database (see
+  [Licensing](#licensing-considerations)); attribution is still required.
+- **Format** — implemented from **CSV** (not the proprietary `.BIN` reader):
+  `geoip/ip2location.go` parses the quoted integer-range CSV into sorted
+  per-family slices resolved by binary search. Monthly; **token-gated**
+  download (free LITE account).
+- **Status** — shipped as an opt-in source: `setup.sh` downloads the v4 + v6
+  DB5 CSVs only when `IP2LOCATION_TOKEN` is set, and geo-server loads it if the
+  CSVs are present. Second whole-space estimate for cross-checking/filling
+  DB-IP gaps.
 
 ### MaxMind GeoLite2 City
 
@@ -113,12 +117,18 @@ satisfy the lat/lon goal on their own:
 The repo currently ships **CC-BY 4.0** sources (DB-IP) which only require
 attribution (already in `README.md`). Two cliffs to watch when adding more:
 
-- **CC-BY-SA 4.0 (share-alike)** — IP2Location LITE, GeoLite2, IPLocate. If we
-  redistribute these databases or a derivative *of the database*, the derivative
-  inherits CC-BY-SA. Querying them at runtime to produce a `GeoResponse` is
-  normal use; bundling/redistributing the data files is the trigger. Keep
-  share-alike sources **optional and clearly labelled**, and prefer not to
-  commit their data into the repo.
+- **CC-BY-SA 4.0 (share-alike)** — IP2Location LITE, GeoLite2, IPLocate. The
+  share-alike term triggers only when you **Share** (distribute to the public)
+  **Adapted Material** — i.e. the database or a derived *database* (CC 4.0
+  §4(b)); answering individual per-IP queries at runtime is normal use, not
+  Sharing. Because our download-at-setup pattern never commits or redistributes
+  the data, **SA imposes no extra burden over CC-BY** for us — attribution
+  (required by both) is the only live obligation, and it rides in each
+  `GeoSourceResult`. **Invariant to preserve this:** do **not** add a bulk-dump
+  / "export the merged database" endpoint sourced from SA data — that would be
+  Sharing a derivative and would relicense the output under BY-SA. Keep
+  share-alike sources **opt-in** and never commit their files (they are
+  gitignored).
 - **Account-gated (GeoLite2 official)** — needs a license key; avoid making it a
   default. The `sapics` CC-BY-SA mirror sidesteps the account but not the
   share-alike terms.
@@ -135,10 +145,10 @@ client already prints — keep that honest for each new source.
    complementary (infra IPs where estimate DBs are weakest). Permissive enough
    (RIPE ToS), modest size, daily. Add as `geoip/ipmap.go` with a setup-time
    download. **Top pick.**
-2. **A second whole-space coordinate DB** — either GeoLite2 City (best accuracy,
-   but CC-BY-SA + account/mirror) or IP2Location LITE (CC-BY-SA, good
-   region/postal). Adding one lets the merge cross-check/agree on coordinates and
-   raises city-level coverage. Ship it **opt-in** because of share-alike.
+2. ~~**A second whole-space coordinate DB.**~~ **Done** — IP2Location LITE DB5
+   shipped as an opt-in CSV source (`geoip/ip2location.go`). GeoLite2 City
+   remains a future option (best accuracy, but adds MaxMind's EULA on top of
+   CC-BY-SA — see above).
 3. **RIR delegated-extended stats** — cheap, authoritative **country floor** that
    fills `GeoResponse.best.country` when nothing finer is available.
 4. **IPtoASN (PDDL)** — if we want ASN enrichment with zero license friction.

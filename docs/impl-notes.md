@@ -277,6 +277,7 @@ authoritative source exists, so we combine and merge several.
 | RFC 8805/9632 geofeeds | country/region/city/postal (NO coords) | operator self-published | per-publisher | `geoip/geofeed.go` |
 | DB-IP City Lite (MMDB) | + lat/lon | aggregated estimate | CC BY 4.0 | `geoip/dbip.go` |
 | RIPE IPmap | country/city + lat/lon (exact-IP only) | measured (Atlas) | RIPE NCC ToS | `geoip/ipmap.go` |
+| IP2Location LITE DB5 (CSV, **opt-in**) | country/city + lat/lon | aggregated estimate | CC BY-SA 4.0 | `geoip/ip2location.go` |
 
 **Key fact:** RFC 8805 geofeeds carry no coordinates — only country
 (ISO 3166-1), region (ISO 3166-2), city, postal. So coordinates always come
@@ -370,6 +371,36 @@ Measured locations for core infrastructure from the RIPE IPmap daily dump
   Verified live: `1.1.1.1` → IPmap "Johannesburg" wins over DB-IP "Sydney".
 
 See [geo-sources.md](geo-sources.md) for the full source survey.
+
+### IP2Location LITE source (`geoip/ip2location.go`, opt-in)
+
+A second whole-space coordinate estimate, complementing DB-IP. **Opt-in**
+because it is credentialed and CC-BY-SA:
+
+- **CSV, not the `.BIN` reader** (deliberate — no proprietary-format library).
+  DB5 columns: `ip_from,ip_to,country_code,country_name,region_name,city_name,
+  latitude,longitude`, double-quoted; parsed with `encoding/csv`.
+- Ranges are **inclusive integer ranges, not CIDRs**: `ip_from`/`ip_to` are
+  decimal (32-bit for the v4 file, up to 128-bit for the v6 file — parsed with
+  `math/big` → `netip.AddrFrom16`). Held in per-family slices sorted by start
+  and resolved by **binary search** (`searchRange`); `matched_prefix` is
+  rendered as `start-end` since it isn't a CIDR.
+- `region` left empty (IP2Location's `region_name` is a name, not ISO 3166-2);
+  `(0,0)` treated as no coordinates (same as DB-IP).
+- **Download is token-gated** (free IP2Location LITE account). `setup.sh`
+  fetches the two ZIPs only when `IP2LOCATION_TOKEN` is exported, unzips the
+  `IP2LOCATION-LITE-DB5(.IPV6).CSV` members to stable cache names, and treats
+  unzip failure as the bad-token/quota signal (IP2Location returns HTTP 200
+  with a text error body). `geoip.FindIP2LocationDatabases` loads whichever
+  family files are present; the source is added to geo-server only if found.
+- **Licensing:** CC-BY-SA share-alike imposes no extra burden here because we
+  never redistribute the DB or a derived database — see
+  [geo-sources.md](geo-sources.md#licensing-considerations). Attribution is
+  still required and carried in the `GeoSourceResult`. **Invariant: do not add a
+  bulk-dump / export-the-merged-database endpoint for SA sources** — that would
+  be Sharing a derivative and trigger BY-SA relicensing.
+- Memory note: the CSV is held in RAM (v4 DB5 is millions of rows), unlike the
+  mmap'd DB-IP — fine for an opt-in source.
 
 ### MMDB reader
 
