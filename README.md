@@ -133,7 +133,7 @@ data available:
 | **RFC 8805 geofeeds** (discovered via RDAP per RFC 9632) | country / region / city / postal — **no coordinates** | self-published by the network operator (high trust) |
 | **DB-IP City Lite** (MMDB) | the above **plus latitude/longitude** | aggregated estimate |
 | **RIPE IPmap** (daily dump) | country / city **plus latitude/longitude**, exact-IP only | measured via RIPE Atlas (core infrastructure) |
-| **IP2Location LITE DB5** (CSV, *opt-in*) | country / city **plus latitude/longitude** | aggregated estimate (enable with `IP2LOCATION_TOKEN`) |
+| **IP2Location LITE DB9** (MMDB, *opt-in*) | country / region / city / postal / tz **plus latitude/longitude** | aggregated estimate (enable with `IP2LOCATION_TOKEN`) |
 
 A `GeoResponse` carries one merged `best` location plus the raw per-source
 results with provenance, so callers can see disagreement. Administrative fields

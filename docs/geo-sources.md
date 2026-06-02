@@ -65,14 +65,17 @@ covers it is often more trustworthy than an aggregated DB.
 - **License** — **CC-BY-SA 4.0** (share-alike). Imposes no extra burden here
   because we do not redistribute the DB or a derived database (see
   [Licensing](#licensing-considerations)); attribution is still required.
-- **Format** — implemented from **CSV** (not the proprietary `.BIN` reader):
-  `geoip/ip2location.go` parses the quoted integer-range CSV into sorted
-  per-family slices resolved by binary search. Monthly; **token-gated**
-  download (free LITE account).
-- **Status** — shipped as an opt-in source: `setup.sh` downloads the v4 + v6
-  DB5 CSVs only when `IP2LOCATION_TOKEN` is set, and geo-server loads it if the
-  CSVs are present. Second whole-space estimate for cross-checking/filling
-  DB-IP gaps.
+- **Format** — implemented from the **DB9 MMDB**. IP2Location ships the LITE
+  MMDB in the **GeoIP2-City schema** (metadata: `DatabaseType GeoLite2-City`),
+  so it reuses our existing `maxminddb-golang/v2` reader via the shared
+  `MMDBCitySource` — **mmap'd (negligible memory), one file for v4+v6**. MMDB is
+  the open MaxMind format, not the proprietary `.BIN`. (An earlier CSV
+  implementation was dropped: it held ~8.7M ranges at ~2 GB RAM, whereas the
+  MMDB build adds ~0 and also carries region/postal/timezone the DB5 CSV lacked.)
+- **Status** — shipped as an opt-in source: `setup.sh` downloads `DB9LITEMMDB`
+  only when `IP2LOCATION_TOKEN` is set; geo-server loads it if present. Second
+  whole-space estimate for cross-checking/filling DB-IP gaps. Full server with
+  all four sources measures ≈ 215 MB RSS.
 
 ### MaxMind GeoLite2 City
 
@@ -145,10 +148,11 @@ client already prints — keep that honest for each new source.
    complementary (infra IPs where estimate DBs are weakest). Permissive enough
    (RIPE ToS), modest size, daily. Add as `geoip/ipmap.go` with a setup-time
    download. **Top pick.**
-2. ~~**A second whole-space coordinate DB.**~~ **Done** — IP2Location LITE DB5
-   shipped as an opt-in CSV source (`geoip/ip2location.go`). GeoLite2 City
-   remains a future option (best accuracy, but adds MaxMind's EULA on top of
-   CC-BY-SA — see above).
+2. ~~**A second whole-space coordinate DB.**~~ **Done** — IP2Location LITE DB9
+   shipped as an opt-in MMDB source (`geoip/ip2location.go` + shared
+   `geoip/mmdb.go`). GeoLite2 City remains a future option (best accuracy, but
+   adds MaxMind's EULA on top of CC-BY-SA — see above); note its MMDB would slot
+   straight into the same `MMDBCitySource`.
 3. **RIR delegated-extended stats** — cheap, authoritative **country floor** that
    fills `GeoResponse.best.country` when nothing finer is available.
 4. **IPtoASN (PDDL)** — if we want ASN enrichment with zero license friction.

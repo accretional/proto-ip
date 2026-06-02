@@ -189,3 +189,25 @@ Append-only notebook. Newest entries at the bottom.
 - (Caught a stale-binary gotcha: enum printed as "4" until geo-client was
   rebuilt after the proto regen; build.sh/test.sh rebuild both, so normal
   flow is unaffected.)
+
+## 2026-06-01 (IP2Location: pivot CSV → MMDB)
+
+- Tested the CSV source against the real DB5 with a live token: worked (v4+v6)
+  but cost **~2 GB RSS** (8.68M in-RAM ranges) — impractical.
+- Discovered IP2Location also publishes a **DB9 LITE MMDB**, and its metadata
+  reports `DatabaseType: GeoLite2-City` — i.e. the **same GeoIP2-City schema as
+  DB-IP**. Pivoted IP2Location from CSV to MMDB:
+    - New shared `geoip/mmdb.go` (`MMDBCitySource` + `cityRecord`); `dbip.go`
+      and `ip2location.go` are now thin constructors differing only in source
+      enum + attribution. Deleted all the CSV parsing / big.Int / range /
+      binary-search code.
+    - One mmap'd file covers v4+v6 → server RSS dropped **~2 GB → 215 MB** (all
+      four sources), load ~3 s. Bonus: DB9 carries region (ISO 3166-2), postal,
+      and timezone that the DB5 CSV lacked.
+    - MMDB is the open MaxMind format (reader we already use), not the
+      proprietary `.BIN`, so it still honours the "no proprietary library"
+      preference — the original reason CSV was chosen.
+    - `setup.sh` now fetches `DB9LITEMMDB` (single ZIP) when `IP2LOCATION_TOKEN`
+      is set; `FindIP2LocationDatabase` + geo-server load it if present.
+- Verified live with the token: download/unzip, server load, and 8.8.8.8 +
+  2001:4860:4860::8888 lookups all correct; test.sh green.

@@ -192,12 +192,14 @@ for entry in "${GEO_SOURCES[@]}"; do
     fetch_geo_source "$s_name" "$s_url" "$s_dest" "$s_fresh" "$s_post"
 done
 
-# --- IP2Location LITE DB5 (OPTIONAL, opt-in) — CC BY-SA 4.0 -----------------
+# --- IP2Location LITE DB9 (OPTIONAL, opt-in) — CC BY-SA 4.0 -----------------
 # Kept separate from the manifest because it is credentialed: it needs a free
 # IP2Location LITE token and ships as a ZIP. Enable by exporting
-# IP2LOCATION_TOKEN before running setup. Not redistributed (the gitignored
-# cache holds it), so the CC BY-SA share-alike term imposes no extra burden;
-# attribution is still required and is carried in the GeoSourceResult.
+# IP2LOCATION_TOKEN before running setup. We fetch the MMDB build (one file
+# covering IPv4+IPv6, mmap'd at runtime — negligible memory), not the CSV.
+# Not redistributed (the gitignored cache holds it), so the CC BY-SA
+# share-alike term imposes no extra burden; attribution is still required and
+# is carried in the GeoSourceResult.
 fetch_ip2location() {  # file_code dest_name zip_member
     local code="$1" dest="$2" member="$3"
     if [[ -n "$(find "$GEO_DATA_DIR" -name "$dest" -mtime -25 2>/dev/null)" ]]; then
@@ -225,8 +227,7 @@ fetch_ip2location() {  # file_code dest_name zip_member
 }
 
 if [[ -n "${IP2LOCATION_TOKEN:-}" ]]; then
-    fetch_ip2location DB5LITECSV     ip2location-lite-db5.csv      'IP2LOCATION-LITE-DB5.CSV'
-    fetch_ip2location DB5LITECSVIPV6 ip2location-lite-db5-ipv6.csv 'IP2LOCATION-LITE-DB5.IPV6.CSV'
+    fetch_ip2location DB9LITEMMDB ip2location-lite-db9.mmdb 'IP2LOCATION-LITE-DB9.MMDB'
 else
     echo "  IP2Location LITE (optional): export IP2LOCATION_TOKEN to enable this source"
 fi

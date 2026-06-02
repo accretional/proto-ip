@@ -277,7 +277,7 @@ authoritative source exists, so we combine and merge several.
 | RFC 8805/9632 geofeeds | country/region/city/postal (NO coords) | operator self-published | per-publisher | `geoip/geofeed.go` |
 | DB-IP City Lite (MMDB) | + lat/lon | aggregated estimate | CC BY 4.0 | `geoip/dbip.go` |
 | RIPE IPmap | country/city + lat/lon (exact-IP only) | measured (Atlas) | RIPE NCC ToS | `geoip/ipmap.go` |
-| IP2Location LITE DB5 (CSV, **opt-in**) | country/city + lat/lon | aggregated estimate | CC BY-SA 4.0 | `geoip/ip2location.go` |
+| IP2Location LITE DB9 (MMDB, **opt-in**) | country/region/city/postal/tz + lat/lon | aggregated estimate | CC BY-SA 4.0 | `geoip/ip2location.go` + `mmdb.go` |
 
 **Key fact:** RFC 8805 geofeeds carry no coordinates — only country
 (ISO 3166-1), region (ISO 3166-2), city, postal. So coordinates always come
@@ -375,49 +375,45 @@ See [geo-sources.md](geo-sources.md) for the full source survey.
 ### IP2Location LITE source (`geoip/ip2location.go`, opt-in)
 
 A second whole-space coordinate estimate, complementing DB-IP. **Opt-in**
-because it is credentialed and CC-BY-SA:
+because it is credentialed and CC-BY-SA.
 
-- **CSV, not the `.BIN` reader** (deliberate — no proprietary-format library).
-  DB5 columns: `ip_from,ip_to,country_code,country_name,region_name,city_name,
-  latitude,longitude`, double-quoted; parsed with `encoding/csv`.
-- Ranges are **inclusive integer ranges, not CIDRs**: `ip_from`/`ip_to` are
-  decimal (32-bit for the v4 file, up to 128-bit for the v6 file — parsed with
-  `math/big` → `netip.AddrFrom16`). Held in per-family slices sorted by start
-  and resolved by **binary search** (`searchRange`); `matched_prefix` is
-  rendered as `start-end` since it isn't a CIDR.
-- `region` left empty (IP2Location's `region_name` is a name, not ISO 3166-2);
-  `(0,0)` treated as no coordinates (same as DB-IP).
+- **MMDB, not CSV or the proprietary `.BIN`.** We use the **DB9 LITE MMDB**,
+  which IP2Location ships in the **GeoIP2-City schema** (its metadata literally
+  reports `DatabaseType: GeoLite2-City`). So it decodes through the **same
+  shared `MMDBCitySource`/`cityRecord` as DB-IP** — `NewIP2LocationSource`
+  differs only in the source enum + attribution. MMDB is the open MaxMind DB
+  format (the reader we already depend on for DB-IP), *not* the proprietary
+  `.BIN`, so this still honours "no proprietary-format library".
+- **One file covers IPv4 + IPv6**, and it is **mmap'd**, so memory is
+  negligible. Measured live: full server with all four sources ≈ **215 MB RSS**,
+  load ~3 s. (This replaced an earlier CSV implementation that held 8.68M
+  integer ranges in RAM at ~2 GB — the MMDB pivot removed that entirely *and*
+  gained `region`/`postal`/`time_zone`, which the DB5 CSV lacked.)
 - **Download is token-gated** (free IP2Location LITE account). `setup.sh`
-  fetches the two ZIPs only when `IP2LOCATION_TOKEN` is exported, unzips the
-  `IP2LOCATION-LITE-DB5(.IPV6).CSV` members to stable cache names, and treats
-  unzip failure as the bad-token/quota signal (IP2Location returns HTTP 200
-  with a text error body). `geoip.FindIP2LocationDatabases` loads whichever
-  family files are present; the source is added to geo-server only if found.
+  fetches the `DB9LITEMMDB` ZIP only when `IP2LOCATION_TOKEN` is exported,
+  unzips the `IP2LOCATION-LITE-DB9.MMDB` member to a stable cache name, and
+  treats unzip failure as the bad-token/quota signal (IP2Location returns HTTP
+  200 with a text error body). `geoip.FindIP2LocationDatabase` locates the
+  cached file; geo-server adds the source only if present.
 - **Licensing:** CC-BY-SA share-alike imposes no extra burden here because we
   never redistribute the DB or a derived database — see
   [geo-sources.md](geo-sources.md#licensing-considerations). Attribution is
   still required and carried in the `GeoSourceResult`. **Invariant: do not add a
   bulk-dump / export-the-merged-database endpoint for SA sources** — that would
   be Sharing a derivative and trigger BY-SA relicensing.
-- Unknown fields are `-` in the data (treated as empty), and whole ranges are
-  often all-unknown with `0,0` coords — those yield no result rather than noise.
-  Country/city strings are interned at load (they repeat across millions of rows).
-- **Memory:** the CSV is held in RAM, unlike the mmap'd DB-IP. Verified live on
-  the real DB5 (v4 2.9M rows + v6 5.8M rows = 8.68M ranges): server RSS ≈ **2 GB**.
-  That is the cost of the CSV-in-RAM choice (the proprietary `.BIN` is mmap'd,
-  hence near-zero RAM, but needs the IP2Location reader library we avoided).
-  A compact layout (uint32/uint64 range bounds + integer-indexed country/city
-  instead of `netip.Addr` + strings) would cut this to roughly ~400–700 MB; not
-  yet implemented. Load takes ~5 s.
 
-### MMDB reader
+### MMDB reader (shared by DB-IP and IP2Location)
 
-`github.com/oschwald/maxminddb-golang/v2` (the only new dependency). v2 API:
+`github.com/oschwald/maxminddb-golang/v2` (the only external dependency). v2 API:
 `maxminddb.Open(path)` → `db.Lookup(netip.Addr)` → `Result.{Err,Found,Decode,Prefix}`.
-DB-IP City Lite uses the GeoIP2-City schema, so we decode into a minimal struct
-(`country.iso_code`, `subdivisions[].iso_code`, `city.names.en`,
-`location.{latitude,longitude,time_zone}`, `postal.code`). `(0,0)` is treated as
-"no coordinates" (Null Island, not a real estimate).
+`geoip/mmdb.go` defines the shared `MMDBCitySource` + `cityRecord` used by **both**
+DB-IP City Lite and IP2Location LITE DB9 (both ship the GeoIP2-City schema):
+decode `country.iso_code`, `subdivisions[].iso_code`, `city.names.en`,
+`location.{latitude,longitude,time_zone}`, `postal.code`; build ISO 3166-2 region
+from country+subdivision; `(0,0)` is treated as "no coordinates" (Null Island).
+`NewDBIPSource`/`NewIP2LocationSource` are thin constructors that differ only in
+source enum + attribution. The reader mmaps the file, so memory stays low even
+for large databases.
 
 ### DB acquisition (manifest-driven)
 

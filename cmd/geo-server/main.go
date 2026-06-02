@@ -52,13 +52,13 @@ func main() {
 		sources = append(sources, src)
 	}
 
-	// IP2Location LITE (optional, opt-in; CC BY-SA 4.0). Loaded only when the
-	// CSVs are present in the cache (downloaded by setup.sh given a token).
-	if v4, v6, ok := geoip.FindIP2LocationDatabases(*dataDir); ok {
-		if src, err := geoip.NewIP2LocationSource(v4, v6); err != nil {
+	// IP2Location LITE DB9 (optional, opt-in; CC BY-SA 4.0). Loaded only when
+	// the MMDB is present in the cache (downloaded by setup.sh given a token).
+	if path, err := geoip.FindIP2LocationDatabase(*dataDir); err == nil {
+		if src, err := geoip.NewIP2LocationSource(path); err != nil {
 			log.Printf("loading IP2Location LITE: %v", err)
 		} else {
-			log.Printf("IP2Location LITE source loaded (%s)", src.Summary())
+			log.Printf("IP2Location LITE source loaded from %s", path)
 			sources = append(sources, src)
 		}
 	}
