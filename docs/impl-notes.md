@@ -380,13 +380,24 @@ DB-IP City Lite uses the GeoIP2-City schema, so we decode into a minimal struct
 `location.{latitude,longitude,time_zone}`, `postal.code`). `(0,0)` is treated as
 "no coordinates" (Null Island, not a real estimate).
 
-### DB acquisition
+### DB acquisition (manifest-driven)
 
-`setup.sh` downloads `https://download.db-ip.com/free/dbip-city-lite-YYYY-MM.mmdb.gz`
-into gitignored `data/geoip/` (tries current then previous month; idempotent;
-download failure only warns). `geoip.FindDBIPDatabase(dir)` globs for the newest
-`dbip-city-lite-*.mmdb`. **Attribution is a license requirement** (CC BY 4.0):
-credited in `README.md`, the `DBIPAttribution` constant, and `geo-client` output.
+All file-based sources are declared in one `GEO_SOURCES` manifest in `setup.sh`
+and fetched by `fetch_geo_source`. Each row is
+`name|url|dest|freshness|postprocess`:
+
+- `url`/`dest` may contain `{YYYY-MM}` (expanded to the target month).
+- `freshness`: `monthly` (skip if the current OR previous month's dest exists;
+  on download try current then fall back to previous month) or `<N>d` (skip if
+  dest exists and is newer than N days).
+- `postprocess`: `gunzip` (download `dest.gz`, gunzip → `dest`) or `none`.
+
+Adding a new file-based source is one manifest row. Every download is
+best-effort (failure only warns; remaining sources still run). Current rows:
+DB-IP City Lite (`monthly`/`gunzip`) and RIPE IPmap (`7d`/`none`).
+`geoip.FindDBIPDatabase` / `FindIPMapDatabase` locate the cached files.
+**DB-IP attribution is a license requirement** (CC BY 4.0): credited in
+`README.md`, the `DBIPAttribution` constant, and `geo-client` output.
 
 ### Address conversion
 

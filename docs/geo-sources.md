@@ -149,9 +149,11 @@ client already prints — keep that honest for each new source.
   merge can weight measured (IPmap) and authoritative (geofeed) results above
   bulk estimates, instead of relying solely on `granularity` + `authoritative`.
   (IPmap's `score` is relative-only, so normalise per source.)
-- Generalise the setup-time download (currently DB-IP-specific in `setup.sh`)
-  into a small manifest of `{url, dest, cadence}` so new file-based sources are
-  one table entry.
+- ~~Generalise the setup-time download into a small manifest of
+  `{url, dest, cadence}` so new file-based sources are one table entry.~~
+  **Done** — see the `GEO_SOURCES` manifest + `fetch_geo_source` in `setup.sh`
+  (rows are `name|url|dest|freshness|postprocess`, with `{YYYY-MM}` templating,
+  `monthly`/`Nd` freshness, and `gunzip`/`none` postprocessing).
 
 ## Sources
 

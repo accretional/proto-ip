@@ -154,3 +154,10 @@ Append-only notebook. Newest entries at the bottom.
     - `setup.sh` downloads the dump (re-fetch if missing/>7d old; warn-not-fail).
 - Tests: parse (incl. comma-in-country + malformed skip), lookup hit/miss, and
   a live real-dump test (skips if absent). All green.
+- Generalised the setup-time download: replaced the two ad-hoc DB-IP / IPmap
+  blocks with a `GEO_SOURCES` manifest (`name|url|dest|freshness|postprocess`)
+  driven by `fetch_geo_source`/`download_to` in `setup.sh`. Supports `{YYYY-MM}`
+  templating, `monthly` vs `<N>d` freshness, and `gunzip`/`none` postprocessing.
+  Adding a file-based source is now one row. Verified both download and
+  idempotent-skip paths for both sources (exit 0). (Gotcha fixed: `$name…` with
+  the UTF-8 ellipsis tripped `set -u` parsing → use `${name}…`.)

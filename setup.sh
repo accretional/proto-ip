@@ -93,12 +93,27 @@ echo "  Running go mod tidy..."
 go mod tidy
 echo "  go mod tidy done"
 
-# --- DB-IP City Lite database (CC BY 4.0) -----------------------------------
-# Downloaded into a gitignored cache for the GeoLookup service. Idempotent:
-# skips if a current- or previous-month file already exists. A download
-# failure only WARNS — the geofeed source still works offline.
+# --- GeoLookup data sources -------------------------------------------------
+# All downloadable databases for the GeoLookup service are declared in one
+# manifest and fetched by a single idempotent loop. To add a file-based source,
+# add one GEO_SOURCES row. Every download is best-effort: a failure only WARNS,
+# and the remaining sources still run. Files land in a gitignored cache.
 GEO_DATA_DIR="data/geoip"
 mkdir -p "$GEO_DATA_DIR"
+
+# Manifest rows are "name|url|dest|freshness|postprocess":
+#   url/dest  may contain {YYYY-MM}, expanded to the target month.
+#   freshness "monthly" -> skip if the current OR previous month's dest exists,
+#                          and on download try the current month then fall back
+#                          to the previous (current month may not be published
+#                          yet early in the month).
+#             "<N>d"    -> skip if dest exists and is newer than N days.
+#   postprocess "gunzip" downloads to dest.gz then gunzips; "none" downloads
+#               straight to dest.
+GEO_SOURCES=(
+    "DB-IP City Lite (CC BY 4.0)|https://download.db-ip.com/free/dbip-city-lite-{YYYY-MM}.mmdb.gz|dbip-city-lite-{YYYY-MM}.mmdb|monthly|gunzip"
+    "RIPE IPmap (RIPE NCC ToS)|https://ftp.ripe.net/ripe/ipmap/geolocations-latest|ipmap-geolocations-latest.csv.bz2|7d|none"
+)
 
 # month_offset N -> YYYY-MM for N months ago, handling BSD (darwin) and GNU date.
 month_offset() {
@@ -110,46 +125,71 @@ month_offset() {
     fi
 }
 
-THIS_MONTH=$(month_offset 0)
-LAST_MONTH=$(month_offset 1)
+# expand_month TEMPLATE OFFSET -> TEMPLATE with {YYYY-MM} set to that month.
+expand_month() {
+    echo "${1//\{YYYY-MM\}/$(month_offset "$2")}"
+}
 
-if [[ -f "$GEO_DATA_DIR/dbip-city-lite-${THIS_MONTH}.mmdb" || \
-      -f "$GEO_DATA_DIR/dbip-city-lite-${LAST_MONTH}.mmdb" ]]; then
-    echo "  DB-IP City Lite DB present (skipping download)"
-else
-    echo "  Downloading DB-IP City Lite database…"
-    fetched=false
-    for M in "$THIS_MONTH" "$LAST_MONTH"; do
-        URL="https://download.db-ip.com/free/dbip-city-lite-${M}.mmdb.gz"
-        GZ="$GEO_DATA_DIR/dbip-city-lite-${M}.mmdb.gz"
-        if curl -fsSL -o "$GZ" "$URL"; then
-            gunzip -f "$GZ"
-            echo "  DB-IP City Lite ${M} downloaded to $GEO_DATA_DIR"
-            fetched=true
-            break
+# download_to URL DEST POSTPROCESS -> 0 on success (DEST then exists), 1 on
+# failure (any partial file is removed).
+download_to() {
+    local url="$1" dest="$2" post="$3"
+    if [[ "$post" == "gunzip" ]]; then
+        if curl -fsSL --max-time 120 -o "$dest.gz" "$url"; then
+            gunzip -f "$dest.gz" && return 0
         fi
-        rm -f "$GZ"
-    done
-    if ! $fetched; then
-        echo "  WARNING: DB-IP download failed; GeoLookup will run geofeed-only."
+        rm -f "$dest.gz"
+        return 1
     fi
-fi
+    if curl -fsSL --max-time 120 -o "$dest" "$url"; then
+        return 0
+    fi
+    rm -f "$dest"
+    return 1
+}
 
-# --- RIPE IPmap infrastructure geolocations (RIPE NCC ToS) ------------------
-# Measured locations for core infrastructure (routers/IXPs), refreshed daily.
-# Kept bzip2-compressed (~5 MB); decoded in-process. Re-downloaded only when
-# the cached copy is missing or older than 7 days. Failure only WARNS.
-IPMAP_FILE="$GEO_DATA_DIR/ipmap-geolocations-latest.csv.bz2"
-if [[ -n "$(find "$GEO_DATA_DIR" -name 'ipmap-geolocations-latest.csv.bz2' -mtime -7 2>/dev/null)" ]]; then
-    echo "  RIPE IPmap dump present and fresh (skipping download)"
-else
-    echo "  Downloading RIPE IPmap geolocations…"
-    if curl -fsSL --max-time 120 -o "$IPMAP_FILE" "https://ftp.ripe.net/ripe/ipmap/geolocations-latest"; then
-        echo "  RIPE IPmap downloaded to $GEO_DATA_DIR"
-    else
-        rm -f "$IPMAP_FILE"
-        echo "  WARNING: RIPE IPmap download failed; that source will be disabled."
+fetch_geo_source() {
+    local name="$1" url="$2" dest_tmpl="$3" freshness="$4" post="$5"
+
+    if [[ "$freshness" == "monthly" ]]; then
+        local cur prev
+        cur="$GEO_DATA_DIR/$(expand_month "$dest_tmpl" 0)"
+        prev="$GEO_DATA_DIR/$(expand_month "$dest_tmpl" 1)"
+        if [[ -f "$cur" || -f "$prev" ]]; then
+            echo "  $name present (skipping download)"
+            return 0
+        fi
+        echo "  Downloading ${name}…"
+        local off
+        for off in 0 1; do
+            if download_to "$(expand_month "$url" "$off")" \
+                           "$GEO_DATA_DIR/$(expand_month "$dest_tmpl" "$off")" "$post"; then
+                echo "  $name downloaded to $GEO_DATA_DIR"
+                return 0
+            fi
+        done
+        echo "  WARNING: $name download failed; that source will be disabled."
+        return 0
     fi
-fi
+
+    # freshness "<N>d": re-fetch when missing or older than N days.
+    local days="${freshness%d}"
+    if [[ -n "$(find "$GEO_DATA_DIR" -name "$dest_tmpl" -mtime -"$days" 2>/dev/null)" ]]; then
+        echo "  $name present and fresh (skipping download)"
+        return 0
+    fi
+    echo "  Downloading ${name}…"
+    if download_to "$url" "$GEO_DATA_DIR/$dest_tmpl" "$post"; then
+        echo "  $name downloaded to $GEO_DATA_DIR"
+    else
+        echo "  WARNING: $name download failed; that source will be disabled."
+    fi
+    return 0
+}
+
+for entry in "${GEO_SOURCES[@]}"; do
+    IFS='|' read -r s_name s_url s_dest s_fresh s_post <<< "$entry"
+    fetch_geo_source "$s_name" "$s_url" "$s_dest" "$s_fresh" "$s_post"
+done
 
 echo "=== setup.sh complete ==="
