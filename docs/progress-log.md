@@ -212,6 +212,38 @@ Append-only notebook. Newest entries at the bottom.
 - Verified live with the token: download/unzip, server load, and 8.8.8.8 +
   2001:4860:4860::8888 lookups all correct; test.sh green.
 
+## 2026-06-02 (reliable AS-level network spine: RPKI + RDAP + rDNS)
+
+- Promoted the routing identity of an address to a first-class `NetworkInfo`
+  block on `GeoResponse` (`network_info`). Motivation: IP→prefix→origin-AS is
+  forced-consistent by the global routing table, so it is far more reliable than
+  any geo estimate; RPKI adds a cryptographic check on top. Inspired by a deep
+  dive into bgp.tools' sources (live route collectors, RIR/RDAP, RPKI,
+  anycatch, PeeringDB/IXP).
+- Three best-effort enrichers attached to the server (not `Source`s), run after
+  `Merge` in `server.go:buildNetworkInfo`:
+    - **RPKI origin validity** (`geoip/rpki.go`): RFC 6811 validation against the
+      public rpki-client VRP dump (`console.rpki-client.org/vrps.json`). Streams
+      the `roas` array with `json.Decoder`; covering-ROA lookup by probing every
+      prefix length. ~929k VRPs from a 92 MB file. Approximation documented:
+      validated against the iptoasn origin ASN, not the announced prefix length.
+    - **RDAP autnum enrichment** (`geoip/netinfo.go`): reuses the existing
+      `rdap.Client` (`LookupAutnum`) for AS name / org / country / abuse,
+      cached per ASN. `asnEnricher` interface for testability.
+    - **reverse DNS** (`netResolver`, 3 s timeout; `ptrResolver` interface).
+- Proto: `RPKIStatus` enum, `RpkiRoa` + `NetworkInfo` messages,
+  `network_info = 8` on `GeoResponse` (existing `asn`/`network` kept).
+- Bug caught at LET_IT_RIP (not unit tests): rpki-client's dump has a `"roas"`
+  key twice — an int count in `metadata` and the real top-level array. The
+  parser was matching the count and loading 0 VRPs. Fixed to skip a `roas` whose
+  value isn't `[`; `rpki_test.go` fixture now carries a `metadata.roas` count.
+- Verified live (LET_IT_RIP): 1.1.1.1/AS13335 + 8.8.8.8/AS15169 →
+  `rpki_status: valid`, RDAP org + abuse populated, reverse DNS (one.one.one.one,
+  dns.google). setup.sh manifest gained the VRP row (1d); geo-server wires
+  `WithRPKI`/`WithASNEnrichment`/`WithReverseDNS`; geo-client prints a `network`
+  block. Follow-ups: PeeringDB/IXP footprint, live MRT (exact prefixes → fully
+  RFC-6811-correct RPKI). test.sh + LET_IT_RIP green.
+
 ## 2026-06-01 (BGP signals: iptoasn ASN + anycast + confidence)
 
 - Added two BGP-derived supplements (neither provides coordinates; they enrich

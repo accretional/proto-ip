@@ -134,6 +134,14 @@ if ! echo "$GEO_OUT" | grep -qE 'coordinates: +-?[0-9]'; then
     exit 1
 fi
 echo "  ✓ Got coordinates for 8.8.8.8"
+# Reliable AS-level "network spine": 8.8.8.8 should report an origin ASN and an
+# RPKI verdict. Best-effort — the RPKI dump / RDAP may be absent offline.
+if echo "$GEO_OUT" | grep -qiE '^asn: *AS[0-9]'; then
+    echo "  ✓ origin ASN reported (network spine)"
+fi
+if echo "$GEO_OUT" | grep -qiE 'rpki_status: *(valid|invalid|not_found)'; then
+    echo "  ✓ RPKI status evaluated (network spine)"
+fi
 echo ""
 
 echo "  Geo lookup: 1.1.1.1 (Cloudflare anycast; expect anycast flag + ASN)..."
@@ -151,6 +159,11 @@ if echo "$ONE_OUT" | grep -qE 'anycast: *true'; then
 fi
 if echo "$ONE_OUT" | grep -qiE 'asn: *AS[0-9]'; then
     echo "  ✓ origin ASN reported (iptoasn / BGP)"
+fi
+# 1.1.1.1 is announced by AS13335 under a valid ROA, so a healthy run with the
+# RPKI dump present shows rpki_status: valid. Best-effort.
+if echo "$ONE_OUT" | grep -qiE 'rpki_status: *valid'; then
+    echo "  ✓ 1.1.1.1 RPKI-valid (AS13335)"
 fi
 echo ""
 

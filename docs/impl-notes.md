@@ -344,6 +344,53 @@ quality, not as a coordinate source:
   `1.1.1.1` / `8.8.8.8` (verified: `1.1.1.1` → anycast=true, confidence=low,
   AS13335 CLOUDFLARENET).
 
+### Network spine (AS-level reliable facts) — `NetworkInfo`
+
+The geolocation `best` is speculative; the *routing identity* of an address is
+not. The global routing table forces consistency on IP → prefix → origin-AS in
+a way nothing forces on geo estimates, so `GeoResponse.network_info`
+(`NetworkInfo`) carries the **reliable spine**: origin ASN, AS registration,
+RPKI validity, and reverse DNS. It is assembled by `server.go:buildNetworkInfo`
+*after* `Merge`, from three best-effort enrichers attached to the `Server`
+(like `AnycastSet`, not `Source`s — a failure in any one logs and leaves its
+fields zero without affecting the rest of the response):
+
+1. **Origin ASN / network** — taken from what `Merge` already lifted off the
+   iptoasn source (`resp.Asn`/`resp.Network`); no new lookup.
+2. **RDAP autnum enrichment** (`geoip/netinfo.go:rdapEnricher`) — given the
+   origin ASN, calls `rdap.Client.LookupAutnum` (reusing the *same* client the
+   geofeed source already builds) and maps `RDAPAutnum` → `as_name`/`country`/
+   `rdap_handle`, `org` from the `REGISTRANT`-role entity, `abuse_email` from
+   the `ABUSE`-role entity. **Cached per ASN** (one RDAP call per distinct AS
+   for the server's lifetime — registration is stable). The enricher is an
+   `asnEnricher` interface so tests stub it without network.
+3. **RPKI origin validity** (`geoip/rpki.go`) — RFC 6811 route-origin
+   validation against the rpki-client VRP dump. `RPKISet` buckets VRPs by family
+   keyed on the (masked) prefix; `Validate(addr, originASN)` finds covering ROAs
+   by probing every prefix length of the address (≤33 v4 / ≤129 v6 map hits) and
+   returns `VALID` (a covering ROA authorizes the origin), `INVALID` (covering
+   ROAs exist, none authorize it), `NOT_FOUND` (unsigned), or `UNKNOWN`
+   (origin ASN 0). Verified live: `1.1.1.1`/AS13335, `8.8.8.8`/AS15169 → valid;
+   ~929k VRPs loaded from the 92 MB dump.
+4. **Reverse DNS** (`geoip/netinfo.go:netResolver`) — `net.Resolver.LookupAddr`
+   with a 3 s per-call timeout; first PTR, trailing dot trimmed. A `ptrResolver`
+   interface for the same testability reason.
+
+**vrps.json parsing gotcha:** the rpki-client dump has a `"roas"` key *twice* —
+an integer count inside `metadata` (e.g. `372447`) and the real top-level array.
+`parseVRPs` streams tokens with a `json.Decoder` (to bound memory on the large
+file) and must **skip a `roas` key whose value is not a `[`** and keep scanning,
+or it loads zero VRPs (this exact bug shipped and was caught only at LET_IT_RIP;
+`rpki_test.go`'s fixture now carries a `metadata.roas` count to guard it).
+
+**RPKI approximation (deliberate, documented):** full RFC 6811 validation needs
+the *announced* prefix length, but our origin ASN comes from iptoasn's
+aggregated ranges, not the actual BGP announcement. So `Validate` checks only the
+covering ROA's authorized **ASN**, not the `maxLength` constraint — it can flag
+an unauthorized origin but not a too-specific announcement under an authorized
+origin. Exact validation needs announced prefixes (MRT / pfx2as), noted as
+future work alongside PeeringDB/IXP footprint.
+
 ### Confidence model
 
 `GeoConfidence` (UNKNOWN<LOW<MEDIUM<HIGH) is a trust axis separate from

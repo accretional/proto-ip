@@ -51,6 +51,24 @@ enum GeoGranularity {
   GEO_GRANULARITY_COORDINATES = 4;
 }
 
+// RPKIStatus is the RFC 6811 route-origin validation state of the queried
+// address against the RPKI Validated ROA Payload (VRP) set. It belongs to the
+// reliable "network spine" (NetworkInfo): unlike geolocation, RPKI is
+// cryptographically anchored to the address holder. NOTE: proto-ip validates
+// against the iptoasn-derived origin ASN and the covering ROA, not the exact
+// announced prefix length (see docs/impl-notes.md), so it is an approximation
+// of full RFC 6811 validation.
+enum RPKIStatus {
+  // Not evaluated: no VRP data loaded, or no origin ASN to validate against.
+  RPKI_STATUS_UNKNOWN = 0;
+  // A covering ROA authorizes the observed origin ASN.
+  RPKI_STATUS_VALID = 1;
+  // Covering ROA(s) exist but none authorize the observed origin ASN.
+  RPKI_STATUS_INVALID = 2;
+  // The address is not covered by any ROA (unsigned address space).
+  RPKI_STATUS_NOT_FOUND = 3;
+}
+
 // GeoLocation is a single physical-location estimate for an IP address.
 // Coordinates are optional so a present "0,0" is distinguishable from
 // "no coordinates available" (geofeeds never carry coordinates).
@@ -89,6 +107,48 @@ message GeoSourceResult {
   string network = 8;
 }
 
+// RpkiRoa is one Validated ROA Payload covering the queried address, surfaced
+// for transparency behind the RPKIStatus verdict.
+message RpkiRoa {
+  // The ROA prefix (e.g. "1.1.1.0/24").
+  string prefix = 1;
+  // The maximum prefix length the ROA authorizes.
+  uint32 max_length = 2;
+  // The ASN the ROA authorizes to originate the prefix.
+  uint32 asn = 3;
+}
+
+// NetworkInfo is the reliable, routing-anchored "spine" of what is known about
+// an IP: its origin Autonomous System, the AS's registration (RDAP), RPKI
+// origin-validation state, and reverse DNS. This is distinct from — and far
+// more reliable than — the best-effort geolocation in `GeoResponse.best`,
+// because the global routing system forces consistency on IP -> prefix -> AS.
+// Every field is best-effort: an unavailable enricher leaves its fields zero
+// without failing the lookup.
+message NetworkInfo {
+  // Origin Autonomous System number (BGP-derived, from iptoasn). Zero = unknown.
+  uint32 asn = 1;
+  // Human-readable network / AS description from the BGP source (iptoasn),
+  // e.g. "CLOUDFLARENET".
+  string network = 2;
+  // AS name from the RDAP autnum registration.
+  string as_name = 3;
+  // Registrant organization from the RDAP autnum (registrant-role entity).
+  string org = 4;
+  // ISO 3166-1 alpha-2 country from the RDAP autnum registration.
+  string registry_country = 5;
+  // Abuse contact email from the RDAP autnum (abuse-role entity).
+  string abuse_email = 6;
+  // RDAP autnum handle (e.g. "AS15169").
+  string rdap_handle = 7;
+  // RPKI route-origin validation verdict for the address.
+  RPKIStatus rpki_status = 8;
+  // The ROAs covering the address, for transparency behind rpki_status.
+  repeated RpkiRoa rpki_covering_roas = 9;
+  // Reverse DNS (PTR) of the queried address, when one resolves.
+  string reverse_dns = 10;
+}
+
 // GeoResponse is the result of a geolocation lookup: one merged best-effort
 // location plus every per-source result for transparency.
 message GeoResponse {
@@ -110,6 +170,10 @@ message GeoResponse {
   // Overall confidence in `best` (the contributing source's level, lowered to
   // LOW when anycast).
   GeoConfidence confidence = 7;
+  // Reliable, routing-anchored AS-level facts about the address (origin AS,
+  // RDAP registration, RPKI validity, reverse DNS). Distinct from and more
+  // trustworthy than `best`; populated best-effort.
+  NetworkInfo network_info = 8;
 }
 
 // GeoLookup performs best-effort IP geolocation by combining multiple free

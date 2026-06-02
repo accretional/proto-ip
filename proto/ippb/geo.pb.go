@@ -206,6 +206,69 @@ func (GeoGranularity) EnumDescriptor() ([]byte, []int) {
 	return file_proto_ippb_geo_proto_rawDescGZIP(), []int{2}
 }
 
+// RPKIStatus is the RFC 6811 route-origin validation state of the queried
+// address against the RPKI Validated ROA Payload (VRP) set. It belongs to the
+// reliable "network spine" (NetworkInfo): unlike geolocation, RPKI is
+// cryptographically anchored to the address holder. NOTE: proto-ip validates
+// against the iptoasn-derived origin ASN and the covering ROA, not the exact
+// announced prefix length (see docs/impl-notes.md), so it is an approximation
+// of full RFC 6811 validation.
+type RPKIStatus int32
+
+const (
+	// Not evaluated: no VRP data loaded, or no origin ASN to validate against.
+	RPKIStatus_RPKI_STATUS_UNKNOWN RPKIStatus = 0
+	// A covering ROA authorizes the observed origin ASN.
+	RPKIStatus_RPKI_STATUS_VALID RPKIStatus = 1
+	// Covering ROA(s) exist but none authorize the observed origin ASN.
+	RPKIStatus_RPKI_STATUS_INVALID RPKIStatus = 2
+	// The address is not covered by any ROA (unsigned address space).
+	RPKIStatus_RPKI_STATUS_NOT_FOUND RPKIStatus = 3
+)
+
+// Enum value maps for RPKIStatus.
+var (
+	RPKIStatus_name = map[int32]string{
+		0: "RPKI_STATUS_UNKNOWN",
+		1: "RPKI_STATUS_VALID",
+		2: "RPKI_STATUS_INVALID",
+		3: "RPKI_STATUS_NOT_FOUND",
+	}
+	RPKIStatus_value = map[string]int32{
+		"RPKI_STATUS_UNKNOWN":   0,
+		"RPKI_STATUS_VALID":     1,
+		"RPKI_STATUS_INVALID":   2,
+		"RPKI_STATUS_NOT_FOUND": 3,
+	}
+)
+
+func (x RPKIStatus) Enum() *RPKIStatus {
+	p := new(RPKIStatus)
+	*p = x
+	return p
+}
+
+func (x RPKIStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RPKIStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_ippb_geo_proto_enumTypes[3].Descriptor()
+}
+
+func (RPKIStatus) Type() protoreflect.EnumType {
+	return &file_proto_ippb_geo_proto_enumTypes[3]
+}
+
+func (x RPKIStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RPKIStatus.Descriptor instead.
+func (RPKIStatus) EnumDescriptor() ([]byte, []int) {
+	return file_proto_ippb_geo_proto_rawDescGZIP(), []int{3}
+}
+
 // GeoLocation is a single physical-location estimate for an IP address.
 // Coordinates are optional so a present "0,0" is distinguishable from
 // "no coordinates available" (geofeeds never carry coordinates).
@@ -422,6 +485,205 @@ func (x *GeoSourceResult) GetNetwork() string {
 	return ""
 }
 
+// RpkiRoa is one Validated ROA Payload covering the queried address, surfaced
+// for transparency behind the RPKIStatus verdict.
+type RpkiRoa struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The ROA prefix (e.g. "1.1.1.0/24").
+	Prefix string `protobuf:"bytes,1,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	// The maximum prefix length the ROA authorizes.
+	MaxLength uint32 `protobuf:"varint,2,opt,name=max_length,json=maxLength,proto3" json:"max_length,omitempty"`
+	// The ASN the ROA authorizes to originate the prefix.
+	Asn           uint32 `protobuf:"varint,3,opt,name=asn,proto3" json:"asn,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RpkiRoa) Reset() {
+	*x = RpkiRoa{}
+	mi := &file_proto_ippb_geo_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RpkiRoa) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RpkiRoa) ProtoMessage() {}
+
+func (x *RpkiRoa) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ippb_geo_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RpkiRoa.ProtoReflect.Descriptor instead.
+func (*RpkiRoa) Descriptor() ([]byte, []int) {
+	return file_proto_ippb_geo_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *RpkiRoa) GetPrefix() string {
+	if x != nil {
+		return x.Prefix
+	}
+	return ""
+}
+
+func (x *RpkiRoa) GetMaxLength() uint32 {
+	if x != nil {
+		return x.MaxLength
+	}
+	return 0
+}
+
+func (x *RpkiRoa) GetAsn() uint32 {
+	if x != nil {
+		return x.Asn
+	}
+	return 0
+}
+
+// NetworkInfo is the reliable, routing-anchored "spine" of what is known about
+// an IP: its origin Autonomous System, the AS's registration (RDAP), RPKI
+// origin-validation state, and reverse DNS. This is distinct from — and far
+// more reliable than — the best-effort geolocation in `GeoResponse.best`,
+// because the global routing system forces consistency on IP -> prefix -> AS.
+// Every field is best-effort: an unavailable enricher leaves its fields zero
+// without failing the lookup.
+type NetworkInfo struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Origin Autonomous System number (BGP-derived, from iptoasn). Zero = unknown.
+	Asn uint32 `protobuf:"varint,1,opt,name=asn,proto3" json:"asn,omitempty"`
+	// Human-readable network / AS description from the BGP source (iptoasn),
+	// e.g. "CLOUDFLARENET".
+	Network string `protobuf:"bytes,2,opt,name=network,proto3" json:"network,omitempty"`
+	// AS name from the RDAP autnum registration.
+	AsName string `protobuf:"bytes,3,opt,name=as_name,json=asName,proto3" json:"as_name,omitempty"`
+	// Registrant organization from the RDAP autnum (registrant-role entity).
+	Org string `protobuf:"bytes,4,opt,name=org,proto3" json:"org,omitempty"`
+	// ISO 3166-1 alpha-2 country from the RDAP autnum registration.
+	RegistryCountry string `protobuf:"bytes,5,opt,name=registry_country,json=registryCountry,proto3" json:"registry_country,omitempty"`
+	// Abuse contact email from the RDAP autnum (abuse-role entity).
+	AbuseEmail string `protobuf:"bytes,6,opt,name=abuse_email,json=abuseEmail,proto3" json:"abuse_email,omitempty"`
+	// RDAP autnum handle (e.g. "AS15169").
+	RdapHandle string `protobuf:"bytes,7,opt,name=rdap_handle,json=rdapHandle,proto3" json:"rdap_handle,omitempty"`
+	// RPKI route-origin validation verdict for the address.
+	RpkiStatus RPKIStatus `protobuf:"varint,8,opt,name=rpki_status,json=rpkiStatus,proto3,enum=ip.RPKIStatus" json:"rpki_status,omitempty"`
+	// The ROAs covering the address, for transparency behind rpki_status.
+	RpkiCoveringRoas []*RpkiRoa `protobuf:"bytes,9,rep,name=rpki_covering_roas,json=rpkiCoveringRoas,proto3" json:"rpki_covering_roas,omitempty"`
+	// Reverse DNS (PTR) of the queried address, when one resolves.
+	ReverseDns    string `protobuf:"bytes,10,opt,name=reverse_dns,json=reverseDns,proto3" json:"reverse_dns,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NetworkInfo) Reset() {
+	*x = NetworkInfo{}
+	mi := &file_proto_ippb_geo_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NetworkInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NetworkInfo) ProtoMessage() {}
+
+func (x *NetworkInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ippb_geo_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NetworkInfo.ProtoReflect.Descriptor instead.
+func (*NetworkInfo) Descriptor() ([]byte, []int) {
+	return file_proto_ippb_geo_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *NetworkInfo) GetAsn() uint32 {
+	if x != nil {
+		return x.Asn
+	}
+	return 0
+}
+
+func (x *NetworkInfo) GetNetwork() string {
+	if x != nil {
+		return x.Network
+	}
+	return ""
+}
+
+func (x *NetworkInfo) GetAsName() string {
+	if x != nil {
+		return x.AsName
+	}
+	return ""
+}
+
+func (x *NetworkInfo) GetOrg() string {
+	if x != nil {
+		return x.Org
+	}
+	return ""
+}
+
+func (x *NetworkInfo) GetRegistryCountry() string {
+	if x != nil {
+		return x.RegistryCountry
+	}
+	return ""
+}
+
+func (x *NetworkInfo) GetAbuseEmail() string {
+	if x != nil {
+		return x.AbuseEmail
+	}
+	return ""
+}
+
+func (x *NetworkInfo) GetRdapHandle() string {
+	if x != nil {
+		return x.RdapHandle
+	}
+	return ""
+}
+
+func (x *NetworkInfo) GetRpkiStatus() RPKIStatus {
+	if x != nil {
+		return x.RpkiStatus
+	}
+	return RPKIStatus_RPKI_STATUS_UNKNOWN
+}
+
+func (x *NetworkInfo) GetRpkiCoveringRoas() []*RpkiRoa {
+	if x != nil {
+		return x.RpkiCoveringRoas
+	}
+	return nil
+}
+
+func (x *NetworkInfo) GetReverseDns() string {
+	if x != nil {
+		return x.ReverseDns
+	}
+	return ""
+}
+
 // GeoResponse is the result of a geolocation lookup: one merged best-effort
 // location plus every per-source result for transparency.
 type GeoResponse struct {
@@ -443,14 +705,18 @@ type GeoResponse struct {
 	Anycast bool `protobuf:"varint,6,opt,name=anycast,proto3" json:"anycast,omitempty"`
 	// Overall confidence in `best` (the contributing source's level, lowered to
 	// LOW when anycast).
-	Confidence    GeoConfidence `protobuf:"varint,7,opt,name=confidence,proto3,enum=ip.GeoConfidence" json:"confidence,omitempty"`
+	Confidence GeoConfidence `protobuf:"varint,7,opt,name=confidence,proto3,enum=ip.GeoConfidence" json:"confidence,omitempty"`
+	// Reliable, routing-anchored AS-level facts about the address (origin AS,
+	// RDAP registration, RPKI validity, reverse DNS). Distinct from and more
+	// trustworthy than `best`; populated best-effort.
+	NetworkInfo   *NetworkInfo `protobuf:"bytes,8,opt,name=network_info,json=networkInfo,proto3" json:"network_info,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GeoResponse) Reset() {
 	*x = GeoResponse{}
-	mi := &file_proto_ippb_geo_proto_msgTypes[2]
+	mi := &file_proto_ippb_geo_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -462,7 +728,7 @@ func (x *GeoResponse) String() string {
 func (*GeoResponse) ProtoMessage() {}
 
 func (x *GeoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_ippb_geo_proto_msgTypes[2]
+	mi := &file_proto_ippb_geo_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -475,7 +741,7 @@ func (x *GeoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GeoResponse.ProtoReflect.Descriptor instead.
 func (*GeoResponse) Descriptor() ([]byte, []int) {
-	return file_proto_ippb_geo_proto_rawDescGZIP(), []int{2}
+	return file_proto_ippb_geo_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *GeoResponse) GetBest() *GeoLocation {
@@ -527,6 +793,13 @@ func (x *GeoResponse) GetConfidence() GeoConfidence {
 	return GeoConfidence_GEO_CONFIDENCE_UNKNOWN
 }
 
+func (x *GeoResponse) GetNetworkInfo() *NetworkInfo {
+	if x != nil {
+		return x.NetworkInfo
+	}
+	return nil
+}
+
 var File_proto_ippb_geo_proto protoreflect.FileDescriptor
 
 const file_proto_ippb_geo_proto_rawDesc = "" +
@@ -555,7 +828,28 @@ const file_proto_ippb_geo_proto_rawDesc = "" +
 	"confidence\x18\x06 \x01(\x0e2\x11.ip.GeoConfidenceR\n" +
 	"confidence\x12\x10\n" +
 	"\x03asn\x18\a \x01(\rR\x03asn\x12\x18\n" +
-	"\anetwork\x18\b \x01(\tR\anetwork\"\x8a\x02\n" +
+	"\anetwork\x18\b \x01(\tR\anetwork\"R\n" +
+	"\aRpkiRoa\x12\x16\n" +
+	"\x06prefix\x18\x01 \x01(\tR\x06prefix\x12\x1d\n" +
+	"\n" +
+	"max_length\x18\x02 \x01(\rR\tmaxLength\x12\x10\n" +
+	"\x03asn\x18\x03 \x01(\rR\x03asn\"\xde\x02\n" +
+	"\vNetworkInfo\x12\x10\n" +
+	"\x03asn\x18\x01 \x01(\rR\x03asn\x12\x18\n" +
+	"\anetwork\x18\x02 \x01(\tR\anetwork\x12\x17\n" +
+	"\aas_name\x18\x03 \x01(\tR\x06asName\x12\x10\n" +
+	"\x03org\x18\x04 \x01(\tR\x03org\x12)\n" +
+	"\x10registry_country\x18\x05 \x01(\tR\x0fregistryCountry\x12\x1f\n" +
+	"\vabuse_email\x18\x06 \x01(\tR\n" +
+	"abuseEmail\x12\x1f\n" +
+	"\vrdap_handle\x18\a \x01(\tR\n" +
+	"rdapHandle\x12/\n" +
+	"\vrpki_status\x18\b \x01(\x0e2\x0e.ip.RPKIStatusR\n" +
+	"rpkiStatus\x129\n" +
+	"\x12rpki_covering_roas\x18\t \x03(\v2\v.ip.RpkiRoaR\x10rpkiCoveringRoas\x12\x1f\n" +
+	"\vreverse_dns\x18\n" +
+	" \x01(\tR\n" +
+	"reverseDns\"\xbe\x02\n" +
 	"\vGeoResponse\x12#\n" +
 	"\x04best\x18\x01 \x01(\v2\x0f.ip.GeoLocationR\x04best\x12.\n" +
 	"\vbest_source\x18\x02 \x01(\x0e2\r.ip.GeoSourceR\n" +
@@ -566,7 +860,8 @@ const file_proto_ippb_geo_proto_rawDesc = "" +
 	"\aanycast\x18\x06 \x01(\bR\aanycast\x121\n" +
 	"\n" +
 	"confidence\x18\a \x01(\x0e2\x11.ip.GeoConfidenceR\n" +
-	"confidence*\xa4\x01\n" +
+	"confidence\x122\n" +
+	"\fnetwork_info\x18\b \x01(\v2\x0f.ip.NetworkInfoR\vnetworkInfo*\xa4\x01\n" +
 	"\tGeoSource\x12\x16\n" +
 	"\x12GEO_SOURCE_UNKNOWN\x10\x00\x12\x16\n" +
 	"\x12GEO_SOURCE_GEOFEED\x10\x01\x12\x18\n" +
@@ -584,7 +879,13 @@ const file_proto_ippb_geo_proto_rawDesc = "" +
 	"\x17GEO_GRANULARITY_COUNTRY\x10\x01\x12\x1a\n" +
 	"\x16GEO_GRANULARITY_REGION\x10\x02\x12\x18\n" +
 	"\x14GEO_GRANULARITY_CITY\x10\x03\x12\x1f\n" +
-	"\x1bGEO_GRANULARITY_COORDINATES\x10\x042Y\n" +
+	"\x1bGEO_GRANULARITY_COORDINATES\x10\x04*p\n" +
+	"\n" +
+	"RPKIStatus\x12\x17\n" +
+	"\x13RPKI_STATUS_UNKNOWN\x10\x00\x12\x15\n" +
+	"\x11RPKI_STATUS_VALID\x10\x01\x12\x17\n" +
+	"\x13RPKI_STATUS_INVALID\x10\x02\x12\x19\n" +
+	"\x15RPKI_STATUS_NOT_FOUND\x10\x032Y\n" +
 	"\tGeoLookup\x12#\n" +
 	"\bLookupIP\x12\x06.ip.IP\x1a\x0f.ip.GeoResponse\x12'\n" +
 	"\n" +
@@ -602,36 +903,42 @@ func file_proto_ippb_geo_proto_rawDescGZIP() []byte {
 	return file_proto_ippb_geo_proto_rawDescData
 }
 
-var file_proto_ippb_geo_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_proto_ippb_geo_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_proto_ippb_geo_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_proto_ippb_geo_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_proto_ippb_geo_proto_goTypes = []any{
 	(GeoSource)(0),          // 0: ip.GeoSource
 	(GeoConfidence)(0),      // 1: ip.GeoConfidence
 	(GeoGranularity)(0),     // 2: ip.GeoGranularity
-	(*GeoLocation)(nil),     // 3: ip.GeoLocation
-	(*GeoSourceResult)(nil), // 4: ip.GeoSourceResult
-	(*GeoResponse)(nil),     // 5: ip.GeoResponse
-	(*IP)(nil),              // 6: ip.IP
-	(*CIDR)(nil),            // 7: ip.CIDR
+	(RPKIStatus)(0),         // 3: ip.RPKIStatus
+	(*GeoLocation)(nil),     // 4: ip.GeoLocation
+	(*GeoSourceResult)(nil), // 5: ip.GeoSourceResult
+	(*RpkiRoa)(nil),         // 6: ip.RpkiRoa
+	(*NetworkInfo)(nil),     // 7: ip.NetworkInfo
+	(*GeoResponse)(nil),     // 8: ip.GeoResponse
+	(*IP)(nil),              // 9: ip.IP
+	(*CIDR)(nil),            // 10: ip.CIDR
 }
 var file_proto_ippb_geo_proto_depIdxs = []int32{
 	2,  // 0: ip.GeoLocation.granularity:type_name -> ip.GeoGranularity
 	0,  // 1: ip.GeoSourceResult.source:type_name -> ip.GeoSource
-	3,  // 2: ip.GeoSourceResult.location:type_name -> ip.GeoLocation
+	4,  // 2: ip.GeoSourceResult.location:type_name -> ip.GeoLocation
 	1,  // 3: ip.GeoSourceResult.confidence:type_name -> ip.GeoConfidence
-	3,  // 4: ip.GeoResponse.best:type_name -> ip.GeoLocation
-	0,  // 5: ip.GeoResponse.best_source:type_name -> ip.GeoSource
-	4,  // 6: ip.GeoResponse.sources:type_name -> ip.GeoSourceResult
-	1,  // 7: ip.GeoResponse.confidence:type_name -> ip.GeoConfidence
-	6,  // 8: ip.GeoLookup.LookupIP:input_type -> ip.IP
-	7,  // 9: ip.GeoLookup.LookupCIDR:input_type -> ip.CIDR
-	5,  // 10: ip.GeoLookup.LookupIP:output_type -> ip.GeoResponse
-	5,  // 11: ip.GeoLookup.LookupCIDR:output_type -> ip.GeoResponse
-	10, // [10:12] is the sub-list for method output_type
-	8,  // [8:10] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	3,  // 4: ip.NetworkInfo.rpki_status:type_name -> ip.RPKIStatus
+	6,  // 5: ip.NetworkInfo.rpki_covering_roas:type_name -> ip.RpkiRoa
+	4,  // 6: ip.GeoResponse.best:type_name -> ip.GeoLocation
+	0,  // 7: ip.GeoResponse.best_source:type_name -> ip.GeoSource
+	5,  // 8: ip.GeoResponse.sources:type_name -> ip.GeoSourceResult
+	1,  // 9: ip.GeoResponse.confidence:type_name -> ip.GeoConfidence
+	7,  // 10: ip.GeoResponse.network_info:type_name -> ip.NetworkInfo
+	9,  // 11: ip.GeoLookup.LookupIP:input_type -> ip.IP
+	10, // 12: ip.GeoLookup.LookupCIDR:input_type -> ip.CIDR
+	8,  // 13: ip.GeoLookup.LookupIP:output_type -> ip.GeoResponse
+	8,  // 14: ip.GeoLookup.LookupCIDR:output_type -> ip.GeoResponse
+	13, // [13:15] is the sub-list for method output_type
+	11, // [11:13] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_proto_ippb_geo_proto_init() }
@@ -647,8 +954,8 @@ func file_proto_ippb_geo_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_ippb_geo_proto_rawDesc), len(file_proto_ippb_geo_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   3,
+			NumEnums:      4,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

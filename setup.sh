@@ -117,6 +117,7 @@ GEO_SOURCES=(
     "iptoasn IPv6 (PDDL)|https://iptoasn.com/data/ip2asn-v6.tsv.gz|ip2asn-v6.tsv|7d|gunzip"
     "bgp.tools anycast IPv4|https://raw.githubusercontent.com/bgptools/anycast-prefixes/master/anycatch-v4-prefixes.txt|anycast-v4-prefixes.txt|7d|none"
     "bgp.tools anycast IPv6|https://raw.githubusercontent.com/bgptools/anycast-prefixes/master/anycatch-v6-prefixes.txt|anycast-v6-prefixes.txt|7d|none"
+    "rpki-client VRPs (public)|https://console.rpki-client.org/vrps.json|rpki-vrps.json|1d|none"
 )
 
 # month_offset N -> YYYY-MM for N months ago, handling BSD (darwin) and GNU date.

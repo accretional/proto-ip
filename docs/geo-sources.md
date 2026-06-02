@@ -168,8 +168,25 @@ Public BGP data carries no coordinates but supplies enrichment + quality:
   disagree (1.1.1.1, 8.8.8.8). A `GeoConfidence` axis (HIGH measured/authoritative,
   MEDIUM estimate, LOW floor/anycast) now rides on every result — implementing
   the confidence follow-up noted earlier.
+- **rpki-client VRP dump** (`https://console.rpki-client.org/vrps.json`,
+  public; `geoip/rpki.go`) → RFC 6811 origin validity on
+  `NetworkInfo.rpki_status`. The strongest *cryptographic* signal we carry: it
+  states whether the IP's covering ROA authorizes the observed origin ASN.
+  Approximated against the iptoasn origin (not the announced prefix length) —
+  see [impl-notes](impl-notes.md). ~929k VRPs, ~92 MB JSON, refreshed daily.
+
+The **reliable AS-level "network spine"** (`GeoResponse.network_info`,
+`NetworkInfo`) combines iptoasn (origin ASN), RDAP autnum registration (AS name
+/ org / country / abuse, reusing the `rdap/` package), RPKI validity, and
+reverse DNS — see [impl-notes](impl-notes.md#network-spine-as-level-reliable-facts-networkinfo).
+This is distinct from, and far more trustworthy than, the best-effort geo `best`.
+
 RouteViews/RIPE RIS MRT and CAIDA pfx2as remain alternatives if we ever want
-to build the IP→ASN table ourselves instead of consuming iptoasn.
+to build the IP→ASN table ourselves instead of consuming iptoasn — and would
+also make RPKI validation fully RFC 6811-correct (exact announced prefixes).
+**PeeringDB / EuroIX IXPDB** operator-declared network + IXP/facility footprint
+(a strong city-level infra hint) is the main remaining BGP-adjacent source not
+yet integrated.
 
 ### Suggested merge/proto follow-ups
 

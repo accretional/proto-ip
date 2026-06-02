@@ -67,9 +67,8 @@ func printResponse(resp *pb.GeoResponse) {
 	fmt.Printf("best_source:     %s\n", shortEnum(resp.GetBestSource().String(), "GEO_SOURCE_"))
 	fmt.Printf("confidence:      %s\n", shortEnum(resp.GetConfidence().String(), "GEO_CONFIDENCE_"))
 	fmt.Printf("anycast:         %t\n", resp.GetAnycast())
-	if resp.GetAsn() != 0 {
-		fmt.Printf("asn:             AS%d (%s)\n", resp.GetAsn(), resp.GetNetwork())
-	}
+
+	printNetworkInfo(resp.GetNetworkInfo())
 
 	fmt.Println("=== sources ===")
 	if len(resp.GetSources()) == 0 {
@@ -87,6 +86,35 @@ func printResponse(resp *pb.GeoResponse) {
 		printLocationIndented(sr.GetLocation())
 		fmt.Printf("  attribution:   %s\n", sr.GetAttribution())
 	}
+}
+
+// printNetworkInfo renders the reliable AS-level "network spine": origin AS,
+// RDAP registration, RPKI validity, and reverse DNS.
+func printNetworkInfo(ni *pb.NetworkInfo) {
+	fmt.Println("=== network ===")
+	if ni == nil {
+		fmt.Println("(no network info)")
+		return
+	}
+	if ni.GetAsn() != 0 {
+		fmt.Printf("asn:             AS%d (%s)\n", ni.GetAsn(), ni.GetNetwork())
+	} else {
+		fmt.Println("asn:             (unknown)")
+	}
+	fmt.Printf("as_name:         %s\n", ni.GetAsName())
+	fmt.Printf("org:             %s\n", ni.GetOrg())
+	fmt.Printf("registry_country:%s\n", " "+ni.GetRegistryCountry())
+	fmt.Printf("abuse_email:     %s\n", ni.GetAbuseEmail())
+	fmt.Printf("rdap_handle:     %s\n", ni.GetRdapHandle())
+	fmt.Printf("rpki_status:     %s\n", shortEnum(ni.GetRpkiStatus().String(), "RPKI_STATUS_"))
+	if roas := ni.GetRpkiCoveringRoas(); len(roas) > 0 {
+		summ := make([]string, 0, len(roas))
+		for _, r := range roas {
+			summ = append(summ, fmt.Sprintf("%s-%d AS%d", r.GetPrefix(), r.GetMaxLength(), r.GetAsn()))
+		}
+		fmt.Printf("rpki_roas:       %s\n", strings.Join(summ, ", "))
+	}
+	fmt.Printf("reverse_dns:     %s\n", ni.GetReverseDns())
 }
 
 func printLocation(loc *pb.GeoLocation) {

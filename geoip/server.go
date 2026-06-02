@@ -5,20 +5,28 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"net"
 	"net/netip"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/accretional/proto-ip/rdap"
+
 	pb "github.com/accretional/proto-ip/proto/ippb"
 )
 
 // Server implements the GeoLookup gRPC service over a set of sources, with an
-// optional anycast classifier that annotates responses.
+// optional anycast classifier and the reliable AS-level "network spine"
+// enrichers (RPKI validity, RDAP autnum facts, reverse DNS) that annotate
+// responses.
 type Server struct {
 	pb.UnimplementedGeoLookupServer
-	sources []Source
-	anycast *AnycastSet // optional; nil disables anycast annotation
+	sources  []Source
+	anycast  *AnycastSet // optional; nil disables anycast annotation
+	rpki     *RPKISet    // optional; nil disables RPKI validation
+	enricher asnEnricher // optional; nil disables RDAP autnum enrichment
+	resolver ptrResolver // optional; nil disables reverse-DNS lookup
 }
 
 // NewServer returns a Server that queries sources in order. A source that
@@ -32,6 +40,28 @@ func NewServer(sources ...Source) *Server {
 // force their confidence to LOW. Returns the server for chaining.
 func (s *Server) WithAnycast(a *AnycastSet) *Server {
 	s.anycast = a
+	return s
+}
+
+// WithRPKI attaches an RPKI VRP set used to populate NetworkInfo.rpki_status.
+// Returns the server for chaining.
+func (s *Server) WithRPKI(r *RPKISet) *Server {
+	s.rpki = r
+	return s
+}
+
+// WithASNEnrichment attaches RDAP autnum enrichment (AS name / org / country /
+// abuse) keyed off the origin ASN, reusing the given RDAP client. Returns the
+// server for chaining.
+func (s *Server) WithASNEnrichment(c *rdap.Client) *Server {
+	s.enricher = newRDAPEnricher(c)
+	return s
+}
+
+// WithReverseDNS attaches reverse-DNS (PTR) resolution to NetworkInfo using r
+// (nil uses net.DefaultResolver). Returns the server for chaining.
+func (s *Server) WithReverseDNS(r *net.Resolver) *Server {
+	s.resolver = newNetResolver(r)
 	return s
 }
 
@@ -78,6 +108,10 @@ func (s *Server) lookup(ctx context.Context, addr netip.Addr) *pb.GeoResponse {
 		resp.Anycast = true
 		resp.Confidence = pb.GeoConfidence_GEO_CONFIDENCE_LOW
 	}
+
+	// Attach the reliable AS-level spine (origin AS, RDAP registration, RPKI
+	// validity, reverse DNS). Best-effort and independent of the geo estimate.
+	s.buildNetworkInfo(ctx, addr, resp)
 	return resp
 }
 

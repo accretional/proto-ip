@@ -73,15 +73,18 @@ func main() {
 		}
 	}
 
-	// Geofeed source via the IANA RDAP bootstrap registry.
+	// Geofeed source via the IANA RDAP bootstrap registry. The same RDAP client
+	// is reused below for AS-level (autnum) enrichment of NetworkInfo.
+	var rdapClient *rdap.Client
 	log.Println("Fetching IANA RDAP bootstrap registry…")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	boot, err := rdap.NewBootstrap(ctx)
 	cancel()
 	if err != nil {
-		log.Printf("RDAP bootstrap failed (%v); geofeed discovery disabled", err)
+		log.Printf("RDAP bootstrap failed (%v); geofeed discovery + AS enrichment disabled", err)
 	} else {
-		sources = append(sources, geoip.NewGeofeedSource(rdap.NewClient(boot)))
+		rdapClient = rdap.NewClient(boot)
+		sources = append(sources, geoip.NewGeofeedSource(rdapClient))
 		log.Println("Geofeed source enabled.")
 	}
 
@@ -101,6 +104,25 @@ func main() {
 			log.Printf("anycast classifier enabled (%d prefixes)", a.Len())
 		}
 	}
+
+	// Reliable AS-level "network spine" enrichers (all best-effort, all optional):
+	//   - RPKI origin validity from the rpki-client VRP dump;
+	//   - RDAP autnum facts (AS name / org / country / abuse) reusing rdapClient;
+	//   - reverse DNS (PTR) of the queried address.
+	if path, err := geoip.FindRPKIDatabase(*dataDir); err != nil {
+		log.Printf("RPKI VRP dump unavailable (%v); RPKI validation disabled", err)
+	} else if r, err := geoip.NewRPKISet(path); err != nil {
+		log.Printf("loading RPKI VRPs: %v", err)
+	} else {
+		server = server.WithRPKI(r)
+		log.Printf("RPKI validation enabled (%d VRPs from %s)", r.Len(), path)
+	}
+	if rdapClient != nil {
+		server = server.WithASNEnrichment(rdapClient)
+		log.Println("RDAP autnum enrichment enabled.")
+	}
+	server = server.WithReverseDNS(nil) // net.DefaultResolver
+	log.Println("Reverse-DNS enrichment enabled.")
 
 	srv := grpc.NewServer()
 	pb.RegisterGeoLookupServer(srv, server)

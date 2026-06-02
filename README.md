@@ -143,6 +143,18 @@ It also reports the origin **ASN / network** (from BGP data) and a
 **`confidence`** level (HIGH for measured/authoritative, MEDIUM for estimate
 DBs, LOW for coarse floors).
 
+**Reliable network spine (`network_info`):** distinct from the speculative
+coordinates, every response carries a `NetworkInfo` block with the
+*routing-anchored* facts about the address — origin **ASN**, the AS's **RDAP
+registration** (name / org / country / abuse contact), **RPKI origin validity**
+(RFC 6811, against the rpki-client VRP dump: `valid` / `invalid` / `not_found`),
+and **reverse DNS**. Because the global routing system forces consistency on
+IP → prefix → AS, this is far more trustworthy than any geolocation estimate;
+RPKI validity in particular is cryptographically anchored. All fields are
+best-effort and populated independently. See
+[docs/impl-notes.md](docs/impl-notes.md#network-spine-as-level-reliable-facts-networkinfo)
+for the (deliberately approximate) RPKI validation method.
+
 **Anycast awareness:** a bgp.tools anycast prefix list is loaded as a quality
 signal. When the queried address is anycast (e.g. `1.1.1.1`, `8.8.8.8`), a
 single physical location is meaningless, so `anycast=true` is set and
@@ -175,8 +187,9 @@ deployment that displays DB-IP-derived results must preserve this attribution.
 When the optional IP2Location source is enabled, deployments must also credit
 **IP2Location LITE** ([CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/),
 data from <https://lite.ip2location.com>). RIPE IPmap data is used under the
-RIPE NCC Terms of Service. Each source's attribution is carried in its
-per-source result and printed by `geo-client`.
+RIPE NCC Terms of Service. RPKI origin validity uses the public VRP dump from
+**[rpki-client.org](https://console.rpki-client.org/)**. Each source's
+attribution is carried in its per-source result and printed by `geo-client`.
 
 ## References
 
