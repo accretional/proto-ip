@@ -13,10 +13,12 @@ import (
 	pb "github.com/accretional/proto-ip/proto/ippb"
 )
 
-// Server implements the GeoLookup gRPC service over a set of sources.
+// Server implements the GeoLookup gRPC service over a set of sources, with an
+// optional anycast classifier that annotates responses.
 type Server struct {
 	pb.UnimplementedGeoLookupServer
 	sources []Source
+	anycast *AnycastSet // optional; nil disables anycast annotation
 }
 
 // NewServer returns a Server that queries sources in order. A source that
@@ -24,6 +26,13 @@ type Server struct {
 // no data for the address.
 func NewServer(sources ...Source) *Server {
 	return &Server{sources: sources}
+}
+
+// WithAnycast attaches an anycast prefix set used to flag anycast addresses and
+// force their confidence to LOW. Returns the server for chaining.
+func (s *Server) WithAnycast(a *AnycastSet) *Server {
+	s.anycast = a
+	return s
 }
 
 func (s *Server) LookupIP(ctx context.Context, ip *pb.IP) (*pb.GeoResponse, error) {
@@ -60,12 +69,16 @@ func (s *Server) lookup(ctx context.Context, addr netip.Addr) *pb.GeoResponse {
 			results = append(results, r)
 		}
 	}
-	best, bestSource := Merge(results)
-	return &pb.GeoResponse{
-		Best:       best,
-		BestSource: bestSource,
-		Sources:    results,
+
+	resp := Merge(results)
+
+	// Anycast is a property of the address, not of any source: a single
+	// physical location is not meaningful, so flag it and force confidence LOW.
+	if s.anycast != nil && s.anycast.Contains(addr) {
+		resp.Anycast = true
+		resp.Confidence = pb.GeoConfidence_GEO_CONFIDENCE_LOW
 	}
+	return resp
 }
 
 // addrFromProto reconstructs a netip.Addr from the two sint64 halves of the

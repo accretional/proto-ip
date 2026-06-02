@@ -102,5 +102,6 @@ func (s *MMDBCitySource) Lookup(_ context.Context, ip netip.Addr) (*pb.GeoSource
 		MatchedPrefix: res.Prefix().String(),
 		Authoritative: false,
 		Attribution:   s.attribution,
+		Confidence:    pb.GeoConfidence_GEO_CONFIDENCE_MEDIUM, // aggregated estimate
 	}, nil
 }

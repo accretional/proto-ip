@@ -39,6 +39,9 @@ const (
 	// IP2Location LITE DB5 (CC BY-SA 4.0). Optional, opt-in whole-space
 	// estimate from CSV; carries lat/lon. Aggregated like DB-IP.
 	GeoSource_GEO_SOURCE_IP2LOCATION_LITE GeoSource = 4
+	// iptoasn.com (RouteViews/RIS BGP-derived, PDDL/public domain). Provides
+	// origin ASN + a country floor (no coordinates).
+	GeoSource_GEO_SOURCE_IPTOASN GeoSource = 5
 )
 
 // Enum value maps for GeoSource.
@@ -49,6 +52,7 @@ var (
 		2: "GEO_SOURCE_DBIP_LITE",
 		3: "GEO_SOURCE_IPMAP",
 		4: "GEO_SOURCE_IP2LOCATION_LITE",
+		5: "GEO_SOURCE_IPTOASN",
 	}
 	GeoSource_value = map[string]int32{
 		"GEO_SOURCE_UNKNOWN":          0,
@@ -56,6 +60,7 @@ var (
 		"GEO_SOURCE_DBIP_LITE":        2,
 		"GEO_SOURCE_IPMAP":            3,
 		"GEO_SOURCE_IP2LOCATION_LITE": 4,
+		"GEO_SOURCE_IPTOASN":          5,
 	}
 )
 
@@ -84,6 +89,64 @@ func (x GeoSource) Number() protoreflect.EnumNumber {
 // Deprecated: Use GeoSource.Descriptor instead.
 func (GeoSource) EnumDescriptor() ([]byte, []int) {
 	return file_proto_ippb_geo_proto_rawDescGZIP(), []int{0}
+}
+
+// GeoConfidence is a coarse trust level for a location estimate. It is a
+// separate axis from granularity: a country may be high-confidence while a
+// city is low. Measured (IPmap) and self-published (geofeed) data rate HIGH;
+// aggregated estimate DBs rate MEDIUM; coarse BGP-derived country floors rate
+// LOW; and any address in a known anycast prefix is forced to LOW because a
+// single physical location is not meaningful there.
+type GeoConfidence int32
+
+const (
+	GeoConfidence_GEO_CONFIDENCE_UNKNOWN GeoConfidence = 0
+	GeoConfidence_GEO_CONFIDENCE_LOW     GeoConfidence = 1
+	GeoConfidence_GEO_CONFIDENCE_MEDIUM  GeoConfidence = 2
+	GeoConfidence_GEO_CONFIDENCE_HIGH    GeoConfidence = 3
+)
+
+// Enum value maps for GeoConfidence.
+var (
+	GeoConfidence_name = map[int32]string{
+		0: "GEO_CONFIDENCE_UNKNOWN",
+		1: "GEO_CONFIDENCE_LOW",
+		2: "GEO_CONFIDENCE_MEDIUM",
+		3: "GEO_CONFIDENCE_HIGH",
+	}
+	GeoConfidence_value = map[string]int32{
+		"GEO_CONFIDENCE_UNKNOWN": 0,
+		"GEO_CONFIDENCE_LOW":     1,
+		"GEO_CONFIDENCE_MEDIUM":  2,
+		"GEO_CONFIDENCE_HIGH":    3,
+	}
+)
+
+func (x GeoConfidence) Enum() *GeoConfidence {
+	p := new(GeoConfidence)
+	*p = x
+	return p
+}
+
+func (x GeoConfidence) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (GeoConfidence) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_ippb_geo_proto_enumTypes[1].Descriptor()
+}
+
+func (GeoConfidence) Type() protoreflect.EnumType {
+	return &file_proto_ippb_geo_proto_enumTypes[1]
+}
+
+func (x GeoConfidence) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use GeoConfidence.Descriptor instead.
+func (GeoConfidence) EnumDescriptor() ([]byte, []int) {
+	return file_proto_ippb_geo_proto_rawDescGZIP(), []int{1}
 }
 
 // GeoGranularity ranks how specific a location is, so the merge logic can
@@ -127,11 +190,11 @@ func (x GeoGranularity) String() string {
 }
 
 func (GeoGranularity) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_ippb_geo_proto_enumTypes[1].Descriptor()
+	return file_proto_ippb_geo_proto_enumTypes[2].Descriptor()
 }
 
 func (GeoGranularity) Type() protoreflect.EnumType {
-	return &file_proto_ippb_geo_proto_enumTypes[1]
+	return &file_proto_ippb_geo_proto_enumTypes[2]
 }
 
 func (x GeoGranularity) Number() protoreflect.EnumNumber {
@@ -140,7 +203,7 @@ func (x GeoGranularity) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use GeoGranularity.Descriptor instead.
 func (GeoGranularity) EnumDescriptor() ([]byte, []int) {
-	return file_proto_ippb_geo_proto_rawDescGZIP(), []int{1}
+	return file_proto_ippb_geo_proto_rawDescGZIP(), []int{2}
 }
 
 // GeoLocation is a single physical-location estimate for an IP address.
@@ -261,7 +324,14 @@ type GeoSourceResult struct {
 	// scheme), so this reflects "self-published", not "verified".
 	Authoritative bool `protobuf:"varint,4,opt,name=authoritative,proto3" json:"authoritative,omitempty"`
 	// Required attribution / license credit string for this source.
-	Attribution   string `protobuf:"bytes,5,opt,name=attribution,proto3" json:"attribution,omitempty"`
+	Attribution string `protobuf:"bytes,5,opt,name=attribution,proto3" json:"attribution,omitempty"`
+	// This source's trust level for its own answer.
+	Confidence GeoConfidence `protobuf:"varint,6,opt,name=confidence,proto3,enum=ip.GeoConfidence" json:"confidence,omitempty"`
+	// Origin Autonomous System number, when the source is BGP-derived (iptoasn).
+	// Zero means unknown / not provided by this source.
+	Asn uint32 `protobuf:"varint,7,opt,name=asn,proto3" json:"asn,omitempty"`
+	// Human-readable network / AS description (e.g. "CLOUDFLARENET").
+	Network       string `protobuf:"bytes,8,opt,name=network,proto3" json:"network,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -331,6 +401,27 @@ func (x *GeoSourceResult) GetAttribution() string {
 	return ""
 }
 
+func (x *GeoSourceResult) GetConfidence() GeoConfidence {
+	if x != nil {
+		return x.Confidence
+	}
+	return GeoConfidence_GEO_CONFIDENCE_UNKNOWN
+}
+
+func (x *GeoSourceResult) GetAsn() uint32 {
+	if x != nil {
+		return x.Asn
+	}
+	return 0
+}
+
+func (x *GeoSourceResult) GetNetwork() string {
+	if x != nil {
+		return x.Network
+	}
+	return ""
+}
+
 // GeoResponse is the result of a geolocation lookup: one merged best-effort
 // location plus every per-source result for transparency.
 type GeoResponse struct {
@@ -342,7 +433,17 @@ type GeoResponse struct {
 	// Which source contributed the chosen granularity of `best`.
 	BestSource GeoSource `protobuf:"varint,2,opt,name=best_source,json=bestSource,proto3,enum=ip.GeoSource" json:"best_source,omitempty"`
 	// Every source that returned a result, in lookup order.
-	Sources       []*GeoSourceResult `protobuf:"bytes,3,rep,name=sources,proto3" json:"sources,omitempty"`
+	Sources []*GeoSourceResult `protobuf:"bytes,3,rep,name=sources,proto3" json:"sources,omitempty"`
+	// Origin ASN and network name (BGP-derived), lifted from the iptoasn source.
+	Asn     uint32 `protobuf:"varint,4,opt,name=asn,proto3" json:"asn,omitempty"`
+	Network string `protobuf:"bytes,5,opt,name=network,proto3" json:"network,omitempty"`
+	// True when the address falls in a known anycast prefix (BGP-derived). When
+	// set, `best` coordinates are not a single physical location and `confidence`
+	// is forced to LOW.
+	Anycast bool `protobuf:"varint,6,opt,name=anycast,proto3" json:"anycast,omitempty"`
+	// Overall confidence in `best` (the contributing source's level, lowered to
+	// LOW when anycast).
+	Confidence    GeoConfidence `protobuf:"varint,7,opt,name=confidence,proto3,enum=ip.GeoConfidence" json:"confidence,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -398,6 +499,34 @@ func (x *GeoResponse) GetSources() []*GeoSourceResult {
 	return nil
 }
 
+func (x *GeoResponse) GetAsn() uint32 {
+	if x != nil {
+		return x.Asn
+	}
+	return 0
+}
+
+func (x *GeoResponse) GetNetwork() string {
+	if x != nil {
+		return x.Network
+	}
+	return ""
+}
+
+func (x *GeoResponse) GetAnycast() bool {
+	if x != nil {
+		return x.Anycast
+	}
+	return false
+}
+
+func (x *GeoResponse) GetConfidence() GeoConfidence {
+	if x != nil {
+		return x.Confidence
+	}
+	return GeoConfidence_GEO_CONFIDENCE_UNKNOWN
+}
+
 var File_proto_ippb_geo_proto protoreflect.FileDescriptor
 
 const file_proto_ippb_geo_proto_rawDesc = "" +
@@ -415,24 +544,41 @@ const file_proto_ippb_geo_proto_rawDesc = "" +
 	"\vgranularity\x18\b \x01(\x0e2\x12.ip.GeoGranularityR\vgranularityB\v\n" +
 	"\t_latitudeB\f\n" +
 	"\n" +
-	"_longitude\"\xd4\x01\n" +
+	"_longitude\"\xb3\x02\n" +
 	"\x0fGeoSourceResult\x12%\n" +
 	"\x06source\x18\x01 \x01(\x0e2\r.ip.GeoSourceR\x06source\x12+\n" +
 	"\blocation\x18\x02 \x01(\v2\x0f.ip.GeoLocationR\blocation\x12%\n" +
 	"\x0ematched_prefix\x18\x03 \x01(\tR\rmatchedPrefix\x12$\n" +
 	"\rauthoritative\x18\x04 \x01(\bR\rauthoritative\x12 \n" +
-	"\vattribution\x18\x05 \x01(\tR\vattribution\"\x91\x01\n" +
+	"\vattribution\x18\x05 \x01(\tR\vattribution\x121\n" +
+	"\n" +
+	"confidence\x18\x06 \x01(\x0e2\x11.ip.GeoConfidenceR\n" +
+	"confidence\x12\x10\n" +
+	"\x03asn\x18\a \x01(\rR\x03asn\x12\x18\n" +
+	"\anetwork\x18\b \x01(\tR\anetwork\"\x8a\x02\n" +
 	"\vGeoResponse\x12#\n" +
 	"\x04best\x18\x01 \x01(\v2\x0f.ip.GeoLocationR\x04best\x12.\n" +
 	"\vbest_source\x18\x02 \x01(\x0e2\r.ip.GeoSourceR\n" +
 	"bestSource\x12-\n" +
-	"\asources\x18\x03 \x03(\v2\x13.ip.GeoSourceResultR\asources*\x8c\x01\n" +
+	"\asources\x18\x03 \x03(\v2\x13.ip.GeoSourceResultR\asources\x12\x10\n" +
+	"\x03asn\x18\x04 \x01(\rR\x03asn\x12\x18\n" +
+	"\anetwork\x18\x05 \x01(\tR\anetwork\x12\x18\n" +
+	"\aanycast\x18\x06 \x01(\bR\aanycast\x121\n" +
+	"\n" +
+	"confidence\x18\a \x01(\x0e2\x11.ip.GeoConfidenceR\n" +
+	"confidence*\xa4\x01\n" +
 	"\tGeoSource\x12\x16\n" +
 	"\x12GEO_SOURCE_UNKNOWN\x10\x00\x12\x16\n" +
 	"\x12GEO_SOURCE_GEOFEED\x10\x01\x12\x18\n" +
 	"\x14GEO_SOURCE_DBIP_LITE\x10\x02\x12\x14\n" +
 	"\x10GEO_SOURCE_IPMAP\x10\x03\x12\x1f\n" +
-	"\x1bGEO_SOURCE_IP2LOCATION_LITE\x10\x04*\xa1\x01\n" +
+	"\x1bGEO_SOURCE_IP2LOCATION_LITE\x10\x04\x12\x16\n" +
+	"\x12GEO_SOURCE_IPTOASN\x10\x05*w\n" +
+	"\rGeoConfidence\x12\x1a\n" +
+	"\x16GEO_CONFIDENCE_UNKNOWN\x10\x00\x12\x16\n" +
+	"\x12GEO_CONFIDENCE_LOW\x10\x01\x12\x19\n" +
+	"\x15GEO_CONFIDENCE_MEDIUM\x10\x02\x12\x17\n" +
+	"\x13GEO_CONFIDENCE_HIGH\x10\x03*\xa1\x01\n" +
 	"\x0eGeoGranularity\x12\x1b\n" +
 	"\x17GEO_GRANULARITY_UNKNOWN\x10\x00\x12\x1b\n" +
 	"\x17GEO_GRANULARITY_COUNTRY\x10\x01\x12\x1a\n" +
@@ -456,33 +602,36 @@ func file_proto_ippb_geo_proto_rawDescGZIP() []byte {
 	return file_proto_ippb_geo_proto_rawDescData
 }
 
-var file_proto_ippb_geo_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_proto_ippb_geo_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
 var file_proto_ippb_geo_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_proto_ippb_geo_proto_goTypes = []any{
 	(GeoSource)(0),          // 0: ip.GeoSource
-	(GeoGranularity)(0),     // 1: ip.GeoGranularity
-	(*GeoLocation)(nil),     // 2: ip.GeoLocation
-	(*GeoSourceResult)(nil), // 3: ip.GeoSourceResult
-	(*GeoResponse)(nil),     // 4: ip.GeoResponse
-	(*IP)(nil),              // 5: ip.IP
-	(*CIDR)(nil),            // 6: ip.CIDR
+	(GeoConfidence)(0),      // 1: ip.GeoConfidence
+	(GeoGranularity)(0),     // 2: ip.GeoGranularity
+	(*GeoLocation)(nil),     // 3: ip.GeoLocation
+	(*GeoSourceResult)(nil), // 4: ip.GeoSourceResult
+	(*GeoResponse)(nil),     // 5: ip.GeoResponse
+	(*IP)(nil),              // 6: ip.IP
+	(*CIDR)(nil),            // 7: ip.CIDR
 }
 var file_proto_ippb_geo_proto_depIdxs = []int32{
-	1, // 0: ip.GeoLocation.granularity:type_name -> ip.GeoGranularity
-	0, // 1: ip.GeoSourceResult.source:type_name -> ip.GeoSource
-	2, // 2: ip.GeoSourceResult.location:type_name -> ip.GeoLocation
-	2, // 3: ip.GeoResponse.best:type_name -> ip.GeoLocation
-	0, // 4: ip.GeoResponse.best_source:type_name -> ip.GeoSource
-	3, // 5: ip.GeoResponse.sources:type_name -> ip.GeoSourceResult
-	5, // 6: ip.GeoLookup.LookupIP:input_type -> ip.IP
-	6, // 7: ip.GeoLookup.LookupCIDR:input_type -> ip.CIDR
-	4, // 8: ip.GeoLookup.LookupIP:output_type -> ip.GeoResponse
-	4, // 9: ip.GeoLookup.LookupCIDR:output_type -> ip.GeoResponse
-	8, // [8:10] is the sub-list for method output_type
-	6, // [6:8] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	2,  // 0: ip.GeoLocation.granularity:type_name -> ip.GeoGranularity
+	0,  // 1: ip.GeoSourceResult.source:type_name -> ip.GeoSource
+	3,  // 2: ip.GeoSourceResult.location:type_name -> ip.GeoLocation
+	1,  // 3: ip.GeoSourceResult.confidence:type_name -> ip.GeoConfidence
+	3,  // 4: ip.GeoResponse.best:type_name -> ip.GeoLocation
+	0,  // 5: ip.GeoResponse.best_source:type_name -> ip.GeoSource
+	4,  // 6: ip.GeoResponse.sources:type_name -> ip.GeoSourceResult
+	1,  // 7: ip.GeoResponse.confidence:type_name -> ip.GeoConfidence
+	6,  // 8: ip.GeoLookup.LookupIP:input_type -> ip.IP
+	7,  // 9: ip.GeoLookup.LookupCIDR:input_type -> ip.CIDR
+	5,  // 10: ip.GeoLookup.LookupIP:output_type -> ip.GeoResponse
+	5,  // 11: ip.GeoLookup.LookupCIDR:output_type -> ip.GeoResponse
+	10, // [10:12] is the sub-list for method output_type
+	8,  // [8:10] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_proto_ippb_geo_proto_init() }
@@ -498,7 +647,7 @@ func file_proto_ippb_geo_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_ippb_geo_proto_rawDesc), len(file_proto_ippb_geo_proto_rawDesc)),
-			NumEnums:      2,
+			NumEnums:      3,
 			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,

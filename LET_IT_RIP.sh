@@ -136,13 +136,21 @@ fi
 echo "  ✓ Got coordinates for 8.8.8.8"
 echo ""
 
-echo "  Geo lookup: 1.1.1.1 (Cloudflare; often covered by RIPE IPmap)..."
+echo "  Geo lookup: 1.1.1.1 (Cloudflare anycast; expect anycast flag + ASN)..."
 ONE_OUT=$(bin/geo-client -addr "localhost:$GEO_PORT" ip 1.1.1.1)
 echo "$ONE_OUT"
 if echo "$ONE_OUT" | grep -q 'source: *ipmap'; then
     echo "  ✓ RIPE IPmap (measured infrastructure) source contributed"
 else
     echo "  (1.1.1.1 not in this IPmap dump revision — best-effort, OK)"
+fi
+# When the anycast list + iptoasn are present, 1.1.1.1 should be flagged anycast
+# with low confidence and carry an origin ASN. Best-effort (lists may be absent).
+if echo "$ONE_OUT" | grep -qE 'anycast: *true'; then
+    echo "  ✓ 1.1.1.1 flagged anycast (confidence forced low)"
+fi
+if echo "$ONE_OUT" | grep -qiE 'asn: *AS[0-9]'; then
+    echo "  ✓ origin ASN reported (iptoasn / BGP)"
 fi
 echo ""
 

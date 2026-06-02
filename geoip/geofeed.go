@@ -87,6 +87,7 @@ func (g *GeofeedSource) Lookup(ctx context.Context, ip netip.Addr) (*pb.GeoSourc
 		MatchedPrefix: rec.Prefix.String(),
 		Authoritative: true,
 		Attribution:   GeofeedAttribution,
+		Confidence:    pb.GeoConfidence_GEO_CONFIDENCE_HIGH, // operator self-published
 	}, nil
 }
 

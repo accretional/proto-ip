@@ -134,21 +134,31 @@ data available:
 | **DB-IP City Lite** (MMDB) | the above **plus latitude/longitude** | aggregated estimate |
 | **RIPE IPmap** (daily dump) | country / city **plus latitude/longitude**, exact-IP only | measured via RIPE Atlas (core infrastructure) |
 | **IP2Location LITE DB9** (MMDB, *opt-in*) | country / region / city / postal / tz **plus latitude/longitude** | aggregated estimate (enable with `IP2LOCATION_TOKEN`) |
+| **iptoasn** (RouteViews/RIS BGP) | origin **ASN** + country floor — no coordinates | public BGP route collectors |
 
 A `GeoResponse` carries one merged `best` location plus the raw per-source
 results with provenance, so callers can see disagreement. Administrative fields
 prefer an authoritative geofeed when present; coordinates are filled from DB-IP.
+It also reports the origin **ASN / network** (from BGP data) and a
+**`confidence`** level (HIGH for measured/authoritative, MEDIUM for estimate
+DBs, LOW for coarse floors).
 
-`setup.sh` downloads the DB-IP City Lite MMDB and the RIPE IPmap daily dump
-into a gitignored `data/geoip/` cache; any download that fails is skipped and
-the remaining sources still run. When multiple sources return coordinates,
-IPmap's measured data is preferred over the estimate DBs. **IP2Location LITE**
-is an optional extra estimate source — export `IP2LOCATION_TOKEN` (a free
-IP2Location LITE account token) before `setup.sh` to download its CSVs.
+**Anycast awareness:** a bgp.tools anycast prefix list is loaded as a quality
+signal. When the queried address is anycast (e.g. `1.1.1.1`, `8.8.8.8`), a
+single physical location is meaningless, so `anycast=true` is set and
+`confidence` is forced to LOW — the point is still returned but explicitly
+flagged unreliable. This is exactly the case where the estimate sources
+disagree wildly.
+
+`setup.sh` downloads all the always-on databases (DB-IP, RIPE IPmap, iptoasn,
+the anycast lists) into a gitignored `data/geoip/` cache; any download that
+fails is skipped and the remaining sources still run. When multiple sources
+return coordinates, IPmap's measured data is preferred over the estimate DBs.
+**IP2Location LITE** is an optional extra estimate source — export
+`IP2LOCATION_TOKEN` (a free account token) before `setup.sh` to download it.
 RPKI verification of geofeeds (RFC 9632 §3) and GeoLite2 remain out of scope.
 
-Further candidate sources — more CC-licensed city DBs, RIR delegated stats,
-IPtoASN — are surveyed with licensing and a recommendation in
+Further candidate sources are surveyed with licensing and recommendations in
 [docs/geo-sources.md](docs/geo-sources.md).
 
 ```bash

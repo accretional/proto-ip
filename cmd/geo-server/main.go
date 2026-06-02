@@ -63,6 +63,16 @@ func main() {
 		}
 	}
 
+	// iptoasn BGP-derived source (ASN + country floor; public domain).
+	if v4, v6, ok := geoip.FindIPtoASNDatabases(*dataDir); ok {
+		if src, err := geoip.NewIPtoASNSource(v4, v6); err != nil {
+			log.Printf("loading iptoasn: %v", err)
+		} else {
+			log.Printf("iptoasn source loaded (%s)", src.Summary())
+			sources = append(sources, src)
+		}
+	}
+
 	// Geofeed source via the IANA RDAP bootstrap registry.
 	log.Println("Fetching IANA RDAP bootstrap registry…")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -79,8 +89,21 @@ func main() {
 		log.Fatal("no geolocation sources available; cannot start")
 	}
 
+	server := geoip.NewServer(sources...)
+
+	// Optional anycast classifier (bgp.tools prefix lists): flags anycast
+	// addresses and forces their confidence to LOW.
+	if v4, v6, ok := geoip.FindAnycastFiles(*dataDir); ok {
+		if a, err := geoip.NewAnycastSet(v4, v6); err != nil {
+			log.Printf("loading anycast prefixes: %v", err)
+		} else {
+			server = server.WithAnycast(a)
+			log.Printf("anycast classifier enabled (%d prefixes)", a.Len())
+		}
+	}
+
 	srv := grpc.NewServer()
-	pb.RegisterGeoLookupServer(srv, geoip.NewServer(sources...))
+	pb.RegisterGeoLookupServer(srv, server)
 
 	addr := fmt.Sprintf(":%d", *port)
 	lis, err := net.Listen("tcp", addr)

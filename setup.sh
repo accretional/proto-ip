@@ -113,6 +113,10 @@ mkdir -p "$GEO_DATA_DIR"
 GEO_SOURCES=(
     "DB-IP City Lite (CC BY 4.0)|https://download.db-ip.com/free/dbip-city-lite-{YYYY-MM}.mmdb.gz|dbip-city-lite-{YYYY-MM}.mmdb|monthly|gunzip"
     "RIPE IPmap (RIPE NCC ToS)|https://ftp.ripe.net/ripe/ipmap/geolocations-latest|ipmap-geolocations-latest.csv.bz2|7d|none"
+    "iptoasn IPv4 (PDDL)|https://iptoasn.com/data/ip2asn-v4.tsv.gz|ip2asn-v4.tsv|7d|gunzip"
+    "iptoasn IPv6 (PDDL)|https://iptoasn.com/data/ip2asn-v6.tsv.gz|ip2asn-v6.tsv|7d|gunzip"
+    "bgp.tools anycast IPv4|https://raw.githubusercontent.com/bgptools/anycast-prefixes/master/anycatch-v4-prefixes.txt|anycast-v4-prefixes.txt|7d|none"
+    "bgp.tools anycast IPv6|https://raw.githubusercontent.com/bgptools/anycast-prefixes/master/anycatch-v6-prefixes.txt|anycast-v6-prefixes.txt|7d|none"
 )
 
 # month_offset N -> YYYY-MM for N months ago, handling BSD (darwin) and GNU date.

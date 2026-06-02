@@ -278,6 +278,8 @@ authoritative source exists, so we combine and merge several.
 | DB-IP City Lite (MMDB) | + lat/lon | aggregated estimate | CC BY 4.0 | `geoip/dbip.go` |
 | RIPE IPmap | country/city + lat/lon (exact-IP only) | measured (Atlas) | RIPE NCC ToS | `geoip/ipmap.go` |
 | IP2Location LITE DB9 (MMDB, **opt-in**) | country/region/city/postal/tz + lat/lon | aggregated estimate | CC BY-SA 4.0 | `geoip/ip2location.go` + `mmdb.go` |
+| iptoasn (RouteViews/RIS BGP) | origin ASN + country floor (no coords) | public BGP collectors | PDDL / public domain | `geoip/iptoasn.go` |
+| bgp.tools anycast list (not a Source) | anycast yes/no (quality signal) | measured (bgp.tools) | bgp.tools | `geoip/anycast.go` |
 
 **Key fact:** RFC 8805 geofeeds carry no coordinates — only country
 (ISO 3166-1), region (ISO 3166-2), city, postal. So coordinates always come
@@ -308,13 +310,49 @@ estimate-based DB-IP.
 
 ### Merge policy (`geoip/merge.go`, pure + unit-tested)
 
+`Merge([]*GeoSourceResult) *GeoResponse` populates best / best_source /
+confidence / asn / network / sources:
+
 1. Base = result with highest granularity.
 2. Admin fields (country/region/city/postal) prefer the first authoritative
    (geofeed) result.
 3. Coordinates + time_zone filled from the first coordinate-bearing result
-   (→ DB-IP) if the base lacks them; granularity upgrades to COORDINATES.
-4. `best_source` = the coordinate provider when `best` ends up with coords,
-   else the base source.
+   (→ DB-IP/IP2Location/IPmap) if the base lacks them; granularity upgrades to
+   COORDINATES.
+4. `best_source` + `confidence` = the result that supplied the chosen
+   granularity (the coordinate provider when `best` ends up with coords).
+5. `asn`/`network` lifted from the first source carrying them (iptoasn).
+
+The **anycast** flag and its confidence downgrade are applied by the *server*,
+not Merge, because anycast is a property of the address, not of any source.
+
+### BGP-derived signals (iptoasn + anycast)
+
+Public BGP data carries no coordinates, so it is used for enrichment and
+quality, not as a coordinate source:
+
+- **iptoasn** (`geoip/iptoasn.go`) — `ip2asn-v{4,6}.tsv` from iptoasn.com
+  (RouteViews/RIS-derived, **PDDL/public domain**, hourly). TSV with **text**
+  IP ranges (`netip.ParseAddr`, no big.Int), `AS 0` / country `None` rows
+  skipped. Held as per-family sorted ranges, binary-searched (~566k rows,
+  modest RAM; country/network interned). Returns a COUNTRY-granularity floor
+  plus `asn`/`network` on the `GeoSourceResult`; confidence LOW.
+- **anycast** (`geoip/anycast.go`) — bgp.tools `anycatch-v{4,6}-prefixes.txt`
+  (one CIDR/line). Loaded as an `AnycastSet` (not a `Source`); the server calls
+  `Contains(addr)` and, when true, sets `GeoResponse.anycast` and forces
+  `confidence = LOW`. Directly addresses the anycast disagreement we saw on
+  `1.1.1.1` / `8.8.8.8` (verified: `1.1.1.1` → anycast=true, confidence=low,
+  AS13335 CLOUDFLARENET).
+
+### Confidence model
+
+`GeoConfidence` (UNKNOWN<LOW<MEDIUM<HIGH) is a trust axis separate from
+granularity. Per-source baselines: geofeed + IPmap = HIGH (self-published /
+measured), DB-IP + IP2Location = MEDIUM (estimate), iptoasn = LOW (coarse
+floor). The response confidence is the contributing source's level, forced to
+LOW for anycast. Both sit in `GeoSourceResult.confidence` (per source) and
+`GeoResponse.confidence` (overall). All file-based sources are downloaded by
+the `setup.sh` manifest (`gunzip` for iptoasn, `none` for the anycast lists).
 
 ### Geofeed discovery (RFC 9632)
 

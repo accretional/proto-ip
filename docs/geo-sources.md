@@ -112,7 +112,7 @@ satisfy the lat/lon goal on their own:
 |---|---|---|---|
 | **IPLocate free** | country + ASN | CC-BY-SA 4.0 | CSV + MMDB, daily, no signup. |
 | **IPinfo Lite** | country + ASN | free tier (attribution) | As of 2025 the free tier is **country-level only**. |
-| **IPtoASN** (`iptoasn.com`) | ASN + country | **PDDL 1.0** (public domain) | The only truly attribution-free option. |
+| **IPtoASN** (`iptoasn.com`) | ASN + country | **PDDL 1.0** (public domain) | **INTEGRATED** (`geoip/iptoasn.go`) — origin-ASN enrichment + country floor + confidence. RouteViews/RIS-derived. |
 | **RIR delegated-extended stats** | country per allocation | RIR terms (open) | Authoritative country from the five RIRs' daily `delegated-*-extended-latest`. Good cross-check against geofeed/DB country. |
 
 ## Licensing considerations
@@ -155,14 +155,28 @@ client already prints — keep that honest for each new source.
    straight into the same `MMDBCitySource`.
 3. **RIR delegated-extended stats** — cheap, authoritative **country floor** that
    fills `GeoResponse.best.country` when nothing finer is available.
-4. **IPtoASN (PDDL)** — if we want ASN enrichment with zero license friction.
+4. ~~**IPtoASN (PDDL)** — ASN enrichment with zero license friction.~~ **Done**
+   (`geoip/iptoasn.go`): origin ASN + country floor.
+
+### BGP-derived signals (added)
+
+Public BGP data carries no coordinates but supplies enrichment + quality:
+- **iptoasn** (above) → origin ASN + network name on `GeoResponse.asn/network`.
+- **bgp.tools anycast prefixes** (`geoip/anycast.go`) → `GeoResponse.anycast`,
+  which forces `confidence = LOW`. This is the key quality fix for anycast/CDN
+  IPs where a single coordinate is meaningless and the estimate sources
+  disagree (1.1.1.1, 8.8.8.8). A `GeoConfidence` axis (HIGH measured/authoritative,
+  MEDIUM estimate, LOW floor/anycast) now rides on every result — implementing
+  the confidence follow-up noted earlier.
+RouteViews/RIPE RIS MRT and CAIDA pfx2as remain alternatives if we ever want
+to build the IP→ASN table ourselves instead of consuming iptoasn.
 
 ### Suggested merge/proto follow-ups
 
-- Add an optional **`confidence`/`score`** concept to `GeoSourceResult` so the
-  merge can weight measured (IPmap) and authoritative (geofeed) results above
-  bulk estimates, instead of relying solely on `granularity` + `authoritative`.
-  (IPmap's `score` is relative-only, so normalise per source.)
+- ~~Add an optional **`confidence`** concept to `GeoSourceResult`.~~ **Done** —
+  `GeoConfidence` (LOW/MEDIUM/HIGH) on both `GeoSourceResult` and `GeoResponse`,
+  with anycast forcing LOW. (IPmap's `score` is relative-only and still unused;
+  fold it in per-source if finer weighting is wanted later.)
 - ~~Generalise the setup-time download into a small manifest of
   `{url, dest, cadence}` so new file-based sources are one table entry.~~
   **Done** — see the `GEO_SOURCES` manifest + `fetch_geo_source` in `setup.sh`

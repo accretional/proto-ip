@@ -23,6 +23,22 @@ enum GeoSource {
   // IP2Location LITE DB5 (CC BY-SA 4.0). Optional, opt-in whole-space
   // estimate from CSV; carries lat/lon. Aggregated like DB-IP.
   GEO_SOURCE_IP2LOCATION_LITE = 4;
+  // iptoasn.com (RouteViews/RIS BGP-derived, PDDL/public domain). Provides
+  // origin ASN + a country floor (no coordinates).
+  GEO_SOURCE_IPTOASN = 5;
+}
+
+// GeoConfidence is a coarse trust level for a location estimate. It is a
+// separate axis from granularity: a country may be high-confidence while a
+// city is low. Measured (IPmap) and self-published (geofeed) data rate HIGH;
+// aggregated estimate DBs rate MEDIUM; coarse BGP-derived country floors rate
+// LOW; and any address in a known anycast prefix is forced to LOW because a
+// single physical location is not meaningful there.
+enum GeoConfidence {
+  GEO_CONFIDENCE_UNKNOWN = 0;
+  GEO_CONFIDENCE_LOW = 1;
+  GEO_CONFIDENCE_MEDIUM = 2;
+  GEO_CONFIDENCE_HIGH = 3;
 }
 
 // GeoGranularity ranks how specific a location is, so the merge logic can
@@ -64,6 +80,13 @@ message GeoSourceResult {
   bool authoritative = 4;
   // Required attribution / license credit string for this source.
   string attribution = 5;
+  // This source's trust level for its own answer.
+  GeoConfidence confidence = 6;
+  // Origin Autonomous System number, when the source is BGP-derived (iptoasn).
+  // Zero means unknown / not provided by this source.
+  uint32 asn = 7;
+  // Human-readable network / AS description (e.g. "CLOUDFLARENET").
+  string network = 8;
 }
 
 // GeoResponse is the result of a geolocation lookup: one merged best-effort
@@ -77,6 +100,16 @@ message GeoResponse {
   GeoSource best_source = 2;
   // Every source that returned a result, in lookup order.
   repeated GeoSourceResult sources = 3;
+  // Origin ASN and network name (BGP-derived), lifted from the iptoasn source.
+  uint32 asn = 4;
+  string network = 5;
+  // True when the address falls in a known anycast prefix (BGP-derived). When
+  // set, `best` coordinates are not a single physical location and `confidence`
+  // is forced to LOW.
+  bool anycast = 6;
+  // Overall confidence in `best` (the contributing source's level, lowered to
+  // LOW when anycast).
+  GeoConfidence confidence = 7;
 }
 
 // GeoLookup performs best-effort IP geolocation by combining multiple free

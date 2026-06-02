@@ -211,3 +211,28 @@ Append-only notebook. Newest entries at the bottom.
       is set; `FindIP2LocationDatabase` + geo-server load it if present.
 - Verified live with the token: download/unzip, server load, and 8.8.8.8 +
   2001:4860:4860::8888 lookups all correct; test.sh green.
+
+## 2026-06-01 (BGP signals: iptoasn ASN + anycast + confidence)
+
+- Added two BGP-derived supplements (neither provides coordinates; they enrich
+  and gate quality) plus a confidence axis:
+    - **iptoasn source** (`geoip/iptoasn.go`): `ip2asn-v{4,6}.tsv` from
+      iptoasn.com (RouteViews/RIS, PDDL/public domain). Text-IP ranges, AS-0
+      rows skipped, per-family sorted + binary search, country/network
+      interned. Contributes a COUNTRY floor + origin `asn`/`network`.
+    - **anycast classifier** (`geoip/anycast.go`): bgp.tools
+      `anycatch-v{4,6}-prefixes.txt`. Not a Source; the server calls
+      `Contains(addr)` and sets `GeoResponse.anycast` + forces confidence LOW.
+- Proto: `GEO_SOURCE_IPTOASN`, `GeoConfidence` enum; `confidence`/`asn`/
+  `network` on `GeoSourceResult`; `asn`/`network`/`anycast`/`confidence` on
+  `GeoResponse`. Per-source confidence baselines: geofeed/IPmap HIGH, DB-IP/
+  IP2Location MEDIUM, iptoasn LOW.
+- `Merge` now returns a `*GeoResponse` (best/best_source/confidence/asn/network/
+  sources); the server applies the anycast flag + downgrade afterwards.
+- setup.sh manifest gained iptoasn (gunzip) + the two anycast lists (none);
+  geo-server loads iptoasn as a source and the anycast set via `WithAnycast`;
+  geo-client prints confidence/anycast/asn (overall + per source).
+- Verified live: 1.1.1.1 → anycast=true, confidence=low, AS13335 CLOUDFLARENET;
+  193.0.6.1 → anycast=false, confidence=medium, AS3333 RIPE-NCC. Unit tests for
+  TSV/prefix parsing, range + contains lookups, ASN lift, and anycast downgrade;
+  real-file integration tests skip when absent. test.sh green.

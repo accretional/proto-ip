@@ -65,6 +65,11 @@ func printResponse(resp *pb.GeoResponse) {
 	fmt.Println("=== best ===")
 	printLocation(resp.GetBest())
 	fmt.Printf("best_source:     %s\n", shortEnum(resp.GetBestSource().String(), "GEO_SOURCE_"))
+	fmt.Printf("confidence:      %s\n", shortEnum(resp.GetConfidence().String(), "GEO_CONFIDENCE_"))
+	fmt.Printf("anycast:         %t\n", resp.GetAnycast())
+	if resp.GetAsn() != 0 {
+		fmt.Printf("asn:             AS%d (%s)\n", resp.GetAsn(), resp.GetNetwork())
+	}
 
 	fmt.Println("=== sources ===")
 	if len(resp.GetSources()) == 0 {
@@ -72,9 +77,13 @@ func printResponse(resp *pb.GeoResponse) {
 		return
 	}
 	for _, sr := range resp.GetSources() {
-		fmt.Printf("- source:        %s (authoritative=%t)\n",
-			shortEnum(sr.GetSource().String(), "GEO_SOURCE_"), sr.GetAuthoritative())
+		fmt.Printf("- source:        %s (authoritative=%t, confidence=%s)\n",
+			shortEnum(sr.GetSource().String(), "GEO_SOURCE_"), sr.GetAuthoritative(),
+			shortEnum(sr.GetConfidence().String(), "GEO_CONFIDENCE_"))
 		fmt.Printf("  matched_prefix: %s\n", sr.GetMatchedPrefix())
+		if sr.GetAsn() != 0 {
+			fmt.Printf("  asn:           AS%d (%s)\n", sr.GetAsn(), sr.GetNetwork())
+		}
 		printLocationIndented(sr.GetLocation())
 		fmt.Printf("  attribution:   %s\n", sr.GetAttribution())
 	}

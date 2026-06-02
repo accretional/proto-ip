@@ -6,20 +6,24 @@ import (
 	pb "github.com/accretional/proto-ip/proto/ippb"
 )
 
-// Merge combines per-source results into one best-effort location and reports
-// which source contributed its granularity.
+// Merge combines per-source results into a GeoResponse: one best-effort
+// location, the contributing source, an overall confidence, and BGP-derived
+// ASN/network metadata. The caller is responsible for the anycast flag (and
+// the confidence downgrade it implies), since that is a property of the
+// address rather than of any single source.
 //
 // Policy:
 //   - Base = the result with the highest granularity (COORDINATES > CITY > …).
 //   - Administrative fields (country/region/city/postal) prefer the first
-//     authoritative (self-published geofeed) result, since the operator knows
-//     its own network better than an aggregated estimate.
+//     authoritative (self-published geofeed) result.
 //   - Coordinates and time zone are filled from the first coordinate-bearing
-//     result when the base lacks them (geofeeds never carry coordinates, so in
-//     practice this pulls lat/lon from DB-IP).
-//   - best_source is whichever source supplied the chosen granularity: the
-//     coordinate provider when the merged result has coordinates, else the base.
-func Merge(results []*pb.GeoSourceResult) (*pb.GeoLocation, pb.GeoSource) {
+//     result when the base lacks them (in practice DB-IP / IP2Location / IPmap).
+//   - best_source and confidence come from whichever result supplied the chosen
+//     granularity (the coordinate provider when `best` ends up with coords).
+//   - asn/network are lifted from the first source that carries them (iptoasn).
+func Merge(results []*pb.GeoSourceResult) *pb.GeoResponse {
+	resp := &pb.GeoResponse{Sources: results}
+
 	var base *pb.GeoSourceResult
 	for _, r := range results {
 		if r == nil || r.GetLocation() == nil {
@@ -29,12 +33,22 @@ func Merge(results []*pb.GeoSourceResult) (*pb.GeoLocation, pb.GeoSource) {
 			base = r
 		}
 	}
+
+	// Lift BGP-derived ASN/network from whichever source provides it.
+	for _, r := range results {
+		if r.GetAsn() != 0 {
+			resp.Asn = r.GetAsn()
+			resp.Network = r.GetNetwork()
+			break
+		}
+	}
+
 	if base == nil {
-		return nil, pb.GeoSource_GEO_SOURCE_UNKNOWN
+		return resp // no source had a location (asn/network may still be set)
 	}
 
 	merged := proto.Clone(base.GetLocation()).(*pb.GeoLocation)
-	bestSource := base.GetSource()
+	bestResult := base
 
 	// Prefer authoritative geofeed administrative fields where present.
 	for _, r := range results {
@@ -71,10 +85,13 @@ func Merge(results []*pb.GeoSourceResult) (*pb.GeoLocation, pb.GeoSource) {
 				merged.TimeZone = loc.GetTimeZone()
 			}
 			merged.Granularity = pb.GeoGranularity_GEO_GRANULARITY_COORDINATES
-			bestSource = r.GetSource()
+			bestResult = r
 			break
 		}
 	}
 
-	return merged, bestSource
+	resp.Best = merged
+	resp.BestSource = bestResult.GetSource()
+	resp.Confidence = bestResult.GetConfidence()
+	return resp
 }

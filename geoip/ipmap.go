@@ -130,5 +130,6 @@ func (s *IPMapSource) Lookup(_ context.Context, ip netip.Addr) (*pb.GeoSourceRes
 		MatchedPrefix: netip.PrefixFrom(ip, ip.BitLen()).String(),
 		Authoritative: false,
 		Attribution:   IPMapAttribution,
+		Confidence:    pb.GeoConfidence_GEO_CONFIDENCE_HIGH, // measured (RIPE Atlas)
 	}, nil
 }
