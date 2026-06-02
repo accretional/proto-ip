@@ -399,8 +399,16 @@ because it is credentialed and CC-BY-SA:
   still required and carried in the `GeoSourceResult`. **Invariant: do not add a
   bulk-dump / export-the-merged-database endpoint for SA sources** — that would
   be Sharing a derivative and trigger BY-SA relicensing.
-- Memory note: the CSV is held in RAM (v4 DB5 is millions of rows), unlike the
-  mmap'd DB-IP — fine for an opt-in source.
+- Unknown fields are `-` in the data (treated as empty), and whole ranges are
+  often all-unknown with `0,0` coords — those yield no result rather than noise.
+  Country/city strings are interned at load (they repeat across millions of rows).
+- **Memory:** the CSV is held in RAM, unlike the mmap'd DB-IP. Verified live on
+  the real DB5 (v4 2.9M rows + v6 5.8M rows = 8.68M ranges): server RSS ≈ **2 GB**.
+  That is the cost of the CSV-in-RAM choice (the proprietary `.BIN` is mmap'd,
+  hence near-zero RAM, but needs the IP2Location reader library we avoided).
+  A compact layout (uint32/uint64 range bounds + integer-indexed country/city
+  instead of `netip.Addr` + strings) would cut this to roughly ~400–700 MB; not
+  yet implemented. Load takes ~5 s.
 
 ### MMDB reader
 

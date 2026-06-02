@@ -83,6 +83,31 @@ func TestIP2LocationLookupV4ZeroCoords(t *testing.T) {
 	}
 }
 
+// IP2Location LITE uses "-" for unknown fields, and whole ranges are often
+// entirely unknown (all "-" with 0,0 coordinates). Those must parse to empty
+// strings and produce no result rather than noise.
+func TestIP2LocationUnknownRow(t *testing.T) {
+	lo := netip.MustParseAddr("0.0.0.0")
+	hi := netip.MustParseAddr("0.255.255.255")
+	csv := fmt.Sprintf(`"%s","%s","-","-","-","-","0.000000","0.000000"`+"\n",
+		addrToDecimal(lo, false), addrToDecimal(hi, false))
+	rs, err := parseIP2LocationCSV(strings.NewReader(csv), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rs) != 1 || rs[0].loc.country != "" || rs[0].loc.city != "" {
+		t.Fatalf(`"-" fields should parse to empty: %+v`, rs)
+	}
+	src := &IP2LocationSource{v4: rs}
+	got, err := src.Lookup(context.Background(), netip.MustParseAddr("0.0.0.1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != nil {
+		t.Errorf("all-unknown range should yield no result, got %+v", got)
+	}
+}
+
 func TestIP2LocationLookupV6(t *testing.T) {
 	lo := netip.MustParseAddr("2001:db8::")
 	hi := netip.MustParseAddr("2001:db8::ffff")

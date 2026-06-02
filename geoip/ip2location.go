@@ -115,6 +115,20 @@ func parseIP2LocationCSV(r io.Reader, v6 bool) ([]ip2Range, error) {
 	cr.FieldsPerRecord = -1 // DB5 has 8; tolerate DB11's 10
 	cr.ReuseRecord = true
 
+	// country codes (~250) and city names (tens of thousands) repeat across
+	// millions of rows; intern them so each distinct value is stored once.
+	pool := make(map[string]string)
+	intern := func(s string) string {
+		if s == "" || s == "-" { // "-" is IP2Location's "unknown" placeholder
+			return ""
+		}
+		if v, ok := pool[s]; ok {
+			return v
+		}
+		pool[s] = s
+		return s
+	}
+
 	var out []ip2Range
 	for {
 		rec, err := cr.Read()
@@ -137,7 +151,7 @@ func parseIP2LocationCSV(r io.Reader, v6 bool) ([]ip2Range, error) {
 		out = append(out, ip2Range{
 			start: start,
 			end:   end,
-			loc:   ip2Loc{country: rec[2], city: rec[5], lat: lat, lon: lon},
+			loc:   ip2Loc{country: intern(rec[2]), city: intern(rec[5]), lat: lat, lon: lon},
 		})
 	}
 	// The CSV ships sorted by ip_from, but sort defensively so the binary
@@ -180,6 +194,12 @@ func (s *IP2LocationSource) Lookup(_ context.Context, ip netip.Addr) (*pb.GeoSou
 	}
 	rng, ok := searchRange(rs, ip)
 	if !ok {
+		return nil, nil
+	}
+	// Many ranges in the LITE data are all-"unknown" (country/city blank,
+	// coordinates 0,0). Treat such a match as "no data" rather than emitting an
+	// empty result that adds noise to the merged response.
+	if rng.loc.country == "" && rng.loc.city == "" && rng.loc.lat == 0 && rng.loc.lon == 0 {
 		return nil, nil
 	}
 
