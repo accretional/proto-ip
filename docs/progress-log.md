@@ -92,3 +92,179 @@ Append-only notebook. Newest entries at the bottom.
   and APNIC (1.1.1.0/24) — correct RIR routing and structured response
   fields confirmed.
 - `LET_IT_RIP.sh` updated with RDAP smoke test section.
+
+## 2026-06-01
+
+- Added `GeoLookup` gRPC service for best-effort IP geolocation, combining
+  two free/open sources and merging them (most granular wins).
+- New `proto/ippb/geo.proto`: `GeoLocation` (optional lat/lon + admin fields +
+  `GeoGranularity`), `GeoSourceResult` (provenance/attribution/authoritative),
+  `GeoResponse` (`best` + per-source `sources`), service `GeoLookup`
+  (`LookupIP`, `LookupCIDR`), default port 50099.
+- New `geoip/` package:
+    - `geofeed_csv.go`: RFC 8805 CSV parser (5 cols, `#` comments incl. inline,
+      blank lines, missing trailing fields, malformed-row skip) + longest-prefix
+      match. Table-tested.
+    - `geofeed.go`: RFC 9632 geofeed discovery via TWO channels — inline
+      `Geofeed <url>` in the RDAP body (ARIN), and the RPSL `geofeed:`
+      attribute over whois port 43 (RIPE/APNIC, found via RDAP's `port43`).
+      The whois channel was added after confirming RDAP does NOT carry the URL
+      on RIPE (it only declares the `geofeed1` conformance) — without it the
+      source would be dead. Fetches+caches the CSV. No RPKI verification yet.
+      Verified live against the Pfcloud `2a05:b0c6:a200::/39` feed.
+    - `dbip.go`: DB-IP City Lite MMDB source via
+      `oschwald/maxminddb-golang/v2` (only new dep). Decodes the GeoIP2-City
+      schema; `(0,0)` → no coordinates.
+    - `merge.go`: pure merge — authoritative geofeed admin fields win,
+      coordinates filled from DB-IP, `best_source` = granularity contributor.
+    - `cache.go`, `source.go`, `server.go`.
+- New `cmd/geo-server` (port 50099, `-data-dir`) + `cmd/geo-client` (ip/cidr).
+- `setup.sh`: idempotent DB-IP City Lite download into gitignored `data/geoip/`
+  (current/previous month, warn-not-fail on failure); `geo.proto` registered.
+  `.gitignore` ignores `/data/`. `build.sh` builds the geo binaries.
+- Decisions confirmed with user: sources = geofeeds + DB-IP Lite (excluded
+  IP2Location LITE share-alike + GeoLite2 account-gating); download-at-setup
+  cache; merged-best-plus-per-source response.
+- Tests: CSV parser, longest-prefix, merge precedence/no-mutation, and a live
+  DB-IP decode (`8.8.8.8` → US + coords) that skips when the DB is absent. All
+  green. DB-IP 2026-06 fetched and verified locally.
+- README documents the service + the required DB-IP CC BY 4.0 attribution.
+- Next: optionally add geofeed RPKI verification and more source DBs.
+
+## 2026-06-01 (geo data-source survey + RIPE IPmap)
+
+- Wrote `docs/geo-sources.md`: surveyed candidate free/open geolocation
+  sources (RIPE IPmap, IP2Location LITE, GeoLite2, sapics/ip-location-db,
+  IPLocate, IPinfo Lite, IPtoASN, RIR delegated stats) with granularity,
+  coverage, licensing, formats, and a prioritised recommendation. Linked from
+  README + impl-notes.
+- Implemented the top recommendation: **RIPE IPmap** source (`geoip/ipmap.go`).
+    - Measured locations for core infrastructure; daily dump
+      `ftp.ripe.net/ripe/ipmap/geolocations-latest`. Exact-IP only (/32,/128),
+      ~600k rows. Loaded into a `map[netip.Addr]` at startup.
+    - Kept bzip2-compressed in cache (~5 MB); decoded in-process via
+      `compress/bzip2` (no CLI dep). Real-dump test asserts >400k rows load.
+    - CSV parsed by right-offset because `country_name` is unquoted and may
+      contain commas ("Bonaire, Saint Eustatius and Saba").
+    - New `GEO_SOURCE_IPMAP` enum value; `region` left empty (IPmap state is a
+      name, not ISO 3166-2); `score` not surfaced (it is a relative sort
+      factor, not accuracy — confidence weighting is a documented follow-up).
+    - geo-server lists IPmap before DB-IP so its measured coords win ties.
+      Verified live: 1.1.1.1 → IPmap "Johannesburg" wins over DB-IP "Sydney".
+    - `setup.sh` downloads the dump (re-fetch if missing/>7d old; warn-not-fail).
+- Tests: parse (incl. comma-in-country + malformed skip), lookup hit/miss, and
+  a live real-dump test (skips if absent). All green.
+- Generalised the setup-time download: replaced the two ad-hoc DB-IP / IPmap
+  blocks with a `GEO_SOURCES` manifest (`name|url|dest|freshness|postprocess`)
+  driven by `fetch_geo_source`/`download_to` in `setup.sh`. Supports `{YYYY-MM}`
+  templating, `monthly` vs `<N>d` freshness, and `gunzip`/`none` postprocessing.
+  Adding a file-based source is now one row. Verified both download and
+  idempotent-skip paths for both sources (exit 0). (Gotcha fixed: `$name…` with
+  the UTF-8 ellipsis tripped `set -u` parsing → use `${name}…`.)
+
+## 2026-06-01 (IP2Location LITE opt-in source)
+
+- Added IP2Location LITE DB5 as an **optional, opt-in** source
+  (`geoip/ip2location.go`), a second whole-space coordinate estimate alongside
+  DB-IP. New `GEO_SOURCE_IP2LOCATION_LITE` enum.
+- Implemented from **CSV**, not the proprietary `.BIN` reader (per request — no
+  proprietary-format dependency). DB5 columns parsed with `encoding/csv`;
+  `ip_from`/`ip_to` are decimal integer ranges (32-bit v4, up to 128-bit v6 via
+  `math/big`), stored as per-family sorted `netip.Addr` ranges and resolved by
+  binary search. `matched_prefix` rendered as `start-end` (not a CIDR).
+  `region` left empty (region_name is a name, not ISO 3166-2); `(0,0)` → no
+  coords.
+- Opt-in plumbing: token-gated. `setup.sh` downloads the v4+v6 DB5 CSV ZIPs only
+  when `IP2LOCATION_TOKEN` is exported, unzips the CSV members to stable cache
+  names (unzip failure = bad-token/quota signal). geo-server loads the source
+  only if the CSVs are present (`FindIP2LocationDatabases`).
+- Licensing rationale captured: CC-BY-SA share-alike adds no burden under our
+  download-at-setup / no-redistribution pattern; only attribution applies (in
+  the per-source result + README). Documented the invariant: no bulk-dump of
+  SA-sourced data. See geo-sources.md.
+- Tests: CSV parse (v4), range boundary/gap/miss, 0,0-coords handling, and v6
+  range lookup (decimals generated programmatically). Verified end-to-end with
+  a synthetic DB5 CSV: server loads the source and it appears in per-source
+  output for 8.8.8.8 with CC-BY-SA attribution. All green via test.sh.
+- (Caught a stale-binary gotcha: enum printed as "4" until geo-client was
+  rebuilt after the proto regen; build.sh/test.sh rebuild both, so normal
+  flow is unaffected.)
+
+## 2026-06-01 (IP2Location: pivot CSV → MMDB)
+
+- Tested the CSV source against the real DB5 with a live token: worked (v4+v6)
+  but cost **~2 GB RSS** (8.68M in-RAM ranges) — impractical.
+- Discovered IP2Location also publishes a **DB9 LITE MMDB**, and its metadata
+  reports `DatabaseType: GeoLite2-City` — i.e. the **same GeoIP2-City schema as
+  DB-IP**. Pivoted IP2Location from CSV to MMDB:
+    - New shared `geoip/mmdb.go` (`MMDBCitySource` + `cityRecord`); `dbip.go`
+      and `ip2location.go` are now thin constructors differing only in source
+      enum + attribution. Deleted all the CSV parsing / big.Int / range /
+      binary-search code.
+    - One mmap'd file covers v4+v6 → server RSS dropped **~2 GB → 215 MB** (all
+      four sources), load ~3 s. Bonus: DB9 carries region (ISO 3166-2), postal,
+      and timezone that the DB5 CSV lacked.
+    - MMDB is the open MaxMind format (reader we already use), not the
+      proprietary `.BIN`, so it still honours the "no proprietary library"
+      preference — the original reason CSV was chosen.
+    - `setup.sh` now fetches `DB9LITEMMDB` (single ZIP) when `IP2LOCATION_TOKEN`
+      is set; `FindIP2LocationDatabase` + geo-server load it if present.
+- Verified live with the token: download/unzip, server load, and 8.8.8.8 +
+  2001:4860:4860::8888 lookups all correct; test.sh green.
+
+## 2026-06-02 (reliable AS-level network spine: RPKI + RDAP + rDNS)
+
+- Promoted the routing identity of an address to a first-class `NetworkInfo`
+  block on `GeoResponse` (`network_info`). Motivation: IP→prefix→origin-AS is
+  forced-consistent by the global routing table, so it is far more reliable than
+  any geo estimate; RPKI adds a cryptographic check on top. Inspired by a deep
+  dive into bgp.tools' sources (live route collectors, RIR/RDAP, RPKI,
+  anycatch, PeeringDB/IXP).
+- Three best-effort enrichers attached to the server (not `Source`s), run after
+  `Merge` in `server.go:buildNetworkInfo`:
+    - **RPKI origin validity** (`geoip/rpki.go`): RFC 6811 validation against the
+      public rpki-client VRP dump (`console.rpki-client.org/vrps.json`). Streams
+      the `roas` array with `json.Decoder`; covering-ROA lookup by probing every
+      prefix length. ~929k VRPs from a 92 MB file. Approximation documented:
+      validated against the iptoasn origin ASN, not the announced prefix length.
+    - **RDAP autnum enrichment** (`geoip/netinfo.go`): reuses the existing
+      `rdap.Client` (`LookupAutnum`) for AS name / org / country / abuse,
+      cached per ASN. `asnEnricher` interface for testability.
+    - **reverse DNS** (`netResolver`, 3 s timeout; `ptrResolver` interface).
+- Proto: `RPKIStatus` enum, `RpkiRoa` + `NetworkInfo` messages,
+  `network_info = 8` on `GeoResponse` (existing `asn`/`network` kept).
+- Bug caught at LET_IT_RIP (not unit tests): rpki-client's dump has a `"roas"`
+  key twice — an int count in `metadata` and the real top-level array. The
+  parser was matching the count and loading 0 VRPs. Fixed to skip a `roas` whose
+  value isn't `[`; `rpki_test.go` fixture now carries a `metadata.roas` count.
+- Verified live (LET_IT_RIP): 1.1.1.1/AS13335 + 8.8.8.8/AS15169 →
+  `rpki_status: valid`, RDAP org + abuse populated, reverse DNS (one.one.one.one,
+  dns.google). setup.sh manifest gained the VRP row (1d); geo-server wires
+  `WithRPKI`/`WithASNEnrichment`/`WithReverseDNS`; geo-client prints a `network`
+  block. Follow-ups: PeeringDB/IXP footprint, live MRT (exact prefixes → fully
+  RFC-6811-correct RPKI). test.sh + LET_IT_RIP green.
+
+## 2026-06-01 (BGP signals: iptoasn ASN + anycast + confidence)
+
+- Added two BGP-derived supplements (neither provides coordinates; they enrich
+  and gate quality) plus a confidence axis:
+    - **iptoasn source** (`geoip/iptoasn.go`): `ip2asn-v{4,6}.tsv` from
+      iptoasn.com (RouteViews/RIS, PDDL/public domain). Text-IP ranges, AS-0
+      rows skipped, per-family sorted + binary search, country/network
+      interned. Contributes a COUNTRY floor + origin `asn`/`network`.
+    - **anycast classifier** (`geoip/anycast.go`): bgp.tools
+      `anycatch-v{4,6}-prefixes.txt`. Not a Source; the server calls
+      `Contains(addr)` and sets `GeoResponse.anycast` + forces confidence LOW.
+- Proto: `GEO_SOURCE_IPTOASN`, `GeoConfidence` enum; `confidence`/`asn`/
+  `network` on `GeoSourceResult`; `asn`/`network`/`anycast`/`confidence` on
+  `GeoResponse`. Per-source confidence baselines: geofeed/IPmap HIGH, DB-IP/
+  IP2Location MEDIUM, iptoasn LOW.
+- `Merge` now returns a `*GeoResponse` (best/best_source/confidence/asn/network/
+  sources); the server applies the anycast flag + downgrade afterwards.
+- setup.sh manifest gained iptoasn (gunzip) + the two anycast lists (none);
+  geo-server loads iptoasn as a source and the anycast set via `WithAnycast`;
+  geo-client prints confidence/anycast/asn (overall + per source).
+- Verified live: 1.1.1.1 → anycast=true, confidence=low, AS13335 CLOUDFLARENET;
+  193.0.6.1 → anycast=false, confidence=medium, AS3333 RIPE-NCC. Unit tests for
+  TSV/prefix parsing, range + contains lookups, ASN lift, and anycast downgrade;
+  real-file integration tests skip when absent. test.sh green.

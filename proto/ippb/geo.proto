@@ -1,0 +1,187 @@
+syntax = "proto3";
+
+package ip;
+
+option go_package = "github.com/accretional/proto-ip/proto/ippb;ippb";
+
+import "proto/ippb/ip.proto";
+import "proto/ippb/cidr.proto";
+
+// GeoSource identifies which data source produced a geolocation result.
+// proto-ip combines authoritative-but-coarse self-published geofeeds with
+// the coordinate-bearing DB-IP City Lite database.
+enum GeoSource {
+  GEO_SOURCE_UNKNOWN = 0;
+  // RFC 8805 geofeed, discovered per RFC 9632 (self-published by the
+  // network operator; high trust, but no coordinates).
+  GEO_SOURCE_GEOFEED = 1;
+  // DB-IP City Lite (CC BY 4.0). Aggregated estimate; carries lat/lon.
+  GEO_SOURCE_DBIP_LITE = 2;
+  // RIPE IPmap (RIPE NCC ToS). Measured geolocation of core Internet
+  // infrastructure (routers, IXPs); exact-IP, carries lat/lon.
+  GEO_SOURCE_IPMAP = 3;
+  // IP2Location LITE DB5 (CC BY-SA 4.0). Optional, opt-in whole-space
+  // estimate from CSV; carries lat/lon. Aggregated like DB-IP.
+  GEO_SOURCE_IP2LOCATION_LITE = 4;
+  // iptoasn.com (RouteViews/RIS BGP-derived, PDDL/public domain). Provides
+  // origin ASN + a country floor (no coordinates).
+  GEO_SOURCE_IPTOASN = 5;
+}
+
+// GeoConfidence is a coarse trust level for a location estimate. It is a
+// separate axis from granularity: a country may be high-confidence while a
+// city is low. Measured (IPmap) and self-published (geofeed) data rate HIGH;
+// aggregated estimate DBs rate MEDIUM; coarse BGP-derived country floors rate
+// LOW; and any address in a known anycast prefix is forced to LOW because a
+// single physical location is not meaningful there.
+enum GeoConfidence {
+  GEO_CONFIDENCE_UNKNOWN = 0;
+  GEO_CONFIDENCE_LOW = 1;
+  GEO_CONFIDENCE_MEDIUM = 2;
+  GEO_CONFIDENCE_HIGH = 3;
+}
+
+// GeoGranularity ranks how specific a location is, so the merge logic can
+// pick the most precise result available. COORDINATES is the finest.
+enum GeoGranularity {
+  GEO_GRANULARITY_UNKNOWN = 0;
+  GEO_GRANULARITY_COUNTRY = 1;
+  GEO_GRANULARITY_REGION = 2;
+  GEO_GRANULARITY_CITY = 3;
+  GEO_GRANULARITY_COORDINATES = 4;
+}
+
+// RPKIStatus is the RFC 6811 route-origin validation state of the queried
+// address against the RPKI Validated ROA Payload (VRP) set. It belongs to the
+// reliable "network spine" (NetworkInfo): unlike geolocation, RPKI is
+// cryptographically anchored to the address holder. NOTE: proto-ip validates
+// against the iptoasn-derived origin ASN and the covering ROA, not the exact
+// announced prefix length (see docs/impl-notes.md), so it is an approximation
+// of full RFC 6811 validation.
+enum RPKIStatus {
+  // Not evaluated: no VRP data loaded, or no origin ASN to validate against.
+  RPKI_STATUS_UNKNOWN = 0;
+  // A covering ROA authorizes the observed origin ASN.
+  RPKI_STATUS_VALID = 1;
+  // Covering ROA(s) exist but none authorize the observed origin ASN.
+  RPKI_STATUS_INVALID = 2;
+  // The address is not covered by any ROA (unsigned address space).
+  RPKI_STATUS_NOT_FOUND = 3;
+}
+
+// GeoLocation is a single physical-location estimate for an IP address.
+// Coordinates are optional so a present "0,0" is distinguishable from
+// "no coordinates available" (geofeeds never carry coordinates).
+message GeoLocation {
+  optional double latitude = 1;
+  optional double longitude = 2;
+  // ISO 3166-1 alpha-2 country code (e.g. "US").
+  string country = 3;
+  // ISO 3166-2 region/subdivision code (e.g. "US-CA").
+  string region = 4;
+  string city = 5;
+  string postal_code = 6;
+  // IANA time zone (e.g. "America/Los_Angeles") when the source provides it.
+  string time_zone = 7;
+  GeoGranularity granularity = 8;
+}
+
+// GeoSourceResult is one source's answer for a query, with provenance.
+message GeoSourceResult {
+  GeoSource source = 1;
+  GeoLocation location = 2;
+  // The CIDR prefix the matched record applies to (e.g. "8.8.8.0/24").
+  string matched_prefix = 3;
+  // True when the data is self-published by the network operator (geofeeds).
+  // Note: v1 does not cryptographically verify geofeeds (RFC 9632 RPKI
+  // scheme), so this reflects "self-published", not "verified".
+  bool authoritative = 4;
+  // Required attribution / license credit string for this source.
+  string attribution = 5;
+  // This source's trust level for its own answer.
+  GeoConfidence confidence = 6;
+  // Origin Autonomous System number, when the source is BGP-derived (iptoasn).
+  // Zero means unknown / not provided by this source.
+  uint32 asn = 7;
+  // Human-readable network / AS description (e.g. "CLOUDFLARENET").
+  string network = 8;
+}
+
+// RpkiRoa is one Validated ROA Payload covering the queried address, surfaced
+// for transparency behind the RPKIStatus verdict.
+message RpkiRoa {
+  // The ROA prefix (e.g. "1.1.1.0/24").
+  string prefix = 1;
+  // The maximum prefix length the ROA authorizes.
+  uint32 max_length = 2;
+  // The ASN the ROA authorizes to originate the prefix.
+  uint32 asn = 3;
+}
+
+// NetworkInfo is the reliable, routing-anchored "spine" of what is known about
+// an IP: its origin Autonomous System, the AS's registration (RDAP), RPKI
+// origin-validation state, and reverse DNS. This is distinct from — and far
+// more reliable than — the best-effort geolocation in `GeoResponse.best`,
+// because the global routing system forces consistency on IP -> prefix -> AS.
+// Every field is best-effort: an unavailable enricher leaves its fields zero
+// without failing the lookup.
+message NetworkInfo {
+  // Origin Autonomous System number (BGP-derived, from iptoasn). Zero = unknown.
+  uint32 asn = 1;
+  // Human-readable network / AS description from the BGP source (iptoasn),
+  // e.g. "CLOUDFLARENET".
+  string network = 2;
+  // AS name from the RDAP autnum registration.
+  string as_name = 3;
+  // Registrant organization from the RDAP autnum (registrant-role entity).
+  string org = 4;
+  // ISO 3166-1 alpha-2 country from the RDAP autnum registration.
+  string registry_country = 5;
+  // Abuse contact email from the RDAP autnum (abuse-role entity).
+  string abuse_email = 6;
+  // RDAP autnum handle (e.g. "AS15169").
+  string rdap_handle = 7;
+  // RPKI route-origin validation verdict for the address.
+  RPKIStatus rpki_status = 8;
+  // The ROAs covering the address, for transparency behind rpki_status.
+  repeated RpkiRoa rpki_covering_roas = 9;
+  // Reverse DNS (PTR) of the queried address, when one resolves.
+  string reverse_dns = 10;
+}
+
+// GeoResponse is the result of a geolocation lookup: one merged best-effort
+// location plus every per-source result for transparency.
+message GeoResponse {
+  // Best-effort merged location: the most granular data available, with
+  // coordinates filled from DB-IP and administrative fields preferring an
+  // authoritative geofeed when present.
+  GeoLocation best = 1;
+  // Which source contributed the chosen granularity of `best`.
+  GeoSource best_source = 2;
+  // Every source that returned a result, in lookup order.
+  repeated GeoSourceResult sources = 3;
+  // Origin ASN and network name (BGP-derived), lifted from the iptoasn source.
+  uint32 asn = 4;
+  string network = 5;
+  // True when the address falls in a known anycast prefix (BGP-derived). When
+  // set, `best` coordinates are not a single physical location and `confidence`
+  // is forced to LOW.
+  bool anycast = 6;
+  // Overall confidence in `best` (the contributing source's level, lowered to
+  // LOW when anycast).
+  GeoConfidence confidence = 7;
+  // Reliable, routing-anchored AS-level facts about the address (origin AS,
+  // RDAP registration, RPKI validity, reverse DNS). Distinct from and more
+  // trustworthy than `best`; populated best-effort.
+  NetworkInfo network_info = 8;
+}
+
+// GeoLookup performs best-effort IP geolocation by combining multiple free
+// and open data sources. It returns the most granular location available
+// (ideally latitude/longitude) and is explicit about gaps and disagreement.
+service GeoLookup {
+  // LookupIP geolocates a single IP address.
+  rpc LookupIP(IP) returns (GeoResponse);
+  // LookupCIDR geolocates a CIDR block (uses the network address).
+  rpc LookupCIDR(CIDR) returns (GeoResponse);
+}

@@ -1,0 +1,128 @@
+package geoip
+
+import (
+	"context"
+	"encoding/binary"
+	"fmt"
+	"log"
+	"net"
+	"net/netip"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	"github.com/accretional/proto-ip/rdap"
+
+	pb "github.com/accretional/proto-ip/proto/ippb"
+)
+
+// Server implements the GeoLookup gRPC service over a set of sources, with an
+// optional anycast classifier and the reliable AS-level "network spine"
+// enrichers (RPKI validity, RDAP autnum facts, reverse DNS) that annotate
+// responses.
+type Server struct {
+	pb.UnimplementedGeoLookupServer
+	sources  []Source
+	anycast  *AnycastSet // optional; nil disables anycast annotation
+	rpki     *RPKISet    // optional; nil disables RPKI validation
+	enricher asnEnricher // optional; nil disables RDAP autnum enrichment
+	resolver ptrResolver // optional; nil disables reverse-DNS lookup
+}
+
+// NewServer returns a Server that queries sources in order. A source that
+// errors is logged and skipped; a source that returns (nil, nil) simply has
+// no data for the address.
+func NewServer(sources ...Source) *Server {
+	return &Server{sources: sources}
+}
+
+// WithAnycast attaches an anycast prefix set used to flag anycast addresses and
+// force their confidence to LOW. Returns the server for chaining.
+func (s *Server) WithAnycast(a *AnycastSet) *Server {
+	s.anycast = a
+	return s
+}
+
+// WithRPKI attaches an RPKI VRP set used to populate NetworkInfo.rpki_status.
+// Returns the server for chaining.
+func (s *Server) WithRPKI(r *RPKISet) *Server {
+	s.rpki = r
+	return s
+}
+
+// WithASNEnrichment attaches RDAP autnum enrichment (AS name / org / country /
+// abuse) keyed off the origin ASN, reusing the given RDAP client. Returns the
+// server for chaining.
+func (s *Server) WithASNEnrichment(c *rdap.Client) *Server {
+	s.enricher = newRDAPEnricher(c)
+	return s
+}
+
+// WithReverseDNS attaches reverse-DNS (PTR) resolution to NetworkInfo using r
+// (nil uses net.DefaultResolver). Returns the server for chaining.
+func (s *Server) WithReverseDNS(r *net.Resolver) *Server {
+	s.resolver = newNetResolver(r)
+	return s
+}
+
+func (s *Server) LookupIP(ctx context.Context, ip *pb.IP) (*pb.GeoResponse, error) {
+	addr, err := addrFromProto(ip)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	return s.lookup(ctx, addr), nil
+}
+
+func (s *Server) LookupCIDR(ctx context.Context, cidr *pb.CIDR) (*pb.GeoResponse, error) {
+	if cidr.GetIp() == nil {
+		return nil, status.Error(codes.InvalidArgument, "CIDR.ip must be set")
+	}
+	addr, err := addrFromProto(cidr.GetIp())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	return s.lookup(ctx, addr), nil
+}
+
+// lookup runs every source, collects the results, and merges them. It never
+// returns an error: a missing or failing source degrades coverage but the
+// query still succeeds with whatever data the other sources provide.
+func (s *Server) lookup(ctx context.Context, addr netip.Addr) *pb.GeoResponse {
+	var results []*pb.GeoSourceResult
+	for _, src := range s.sources {
+		r, err := src.Lookup(ctx, addr)
+		if err != nil {
+			log.Printf("geoip: source %s failed for %s: %v", src.Kind(), addr, err)
+			continue
+		}
+		if r != nil {
+			results = append(results, r)
+		}
+	}
+
+	resp := Merge(results)
+
+	// Anycast is a property of the address, not of any source: a single
+	// physical location is not meaningful, so flag it and force confidence LOW.
+	if s.anycast != nil && s.anycast.Contains(addr) {
+		resp.Anycast = true
+		resp.Confidence = pb.GeoConfidence_GEO_CONFIDENCE_LOW
+	}
+
+	// Attach the reliable AS-level spine (origin AS, RDAP registration, RPKI
+	// validity, reverse DNS). Best-effort and independent of the geo estimate.
+	s.buildNetworkInfo(ctx, addr, resp)
+	return resp
+}
+
+// addrFromProto reconstructs a netip.Addr from the two sint64 halves of the
+// proto IP wire form, unmapping IPv4-in-IPv6 so v4 addresses lookup as v4.
+func addrFromProto(ip *pb.IP) (netip.Addr, error) {
+	if ip == nil {
+		return netip.Addr{}, fmt.Errorf("nil IP message")
+	}
+	var b [16]byte
+	binary.BigEndian.PutUint64(b[0:8], uint64(ip.GetNetworkPrefix()))
+	binary.BigEndian.PutUint64(b[8:16], uint64(ip.GetInterfaceIdentifier()))
+	return netip.AddrFrom16(b).Unmap(), nil
+}
