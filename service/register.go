@@ -7,6 +7,7 @@ package service
 import (
 	"context"
 	"log"
+	"os"
 	"time"
 
 	"google.golang.org/grpc"
@@ -17,33 +18,92 @@ import (
 	"github.com/accretional/proto-ip/rdap"
 )
 
+// GeoDataDirEnv names the env var pointing at the geo data directory (iptoasn
+// tsvs, DB-IP mmdb, anycast prefix lists, rpki-vrps.json). Files are loaded
+// best-effort — whatever is present is used; missing files degrade gracefully.
+const GeoDataDirEnv = "PROTO_IP_GEO_DATA"
+
 // Register registers all three proto-ip services on s.
 //
 //   - LocalLookup is always registered (reads local kernel state).
-//   - RDAPLookup and GeoLookup depend on the IANA RDAP bootstrap registry
-//     (network). If bootstrap fails, RDAPLookup is skipped and GeoLookup is
-//     registered with no sources (best-effort/empty) so the pipeline still runs.
+//   - RDAPLookup + GeoLookup use the IANA RDAP bootstrap registry (network). If
+//     bootstrap fails, RDAPLookup is skipped and RDAP-derived geo enrichment is
+//     disabled, but GeoLookup still registers with any file-backed sources.
 //
-// GeoLookup uses network-only enrichers (geofeed discovery via RDAP, RDAP autnum
-// enrichment, reverse DNS) — no local geo data files are required.
+// GeoLookup loads every geo source found under $PROTO_IP_GEO_DATA (default
+// ./data/geoip): DB-IP City Lite + RIPE IPmap + IP2Location LITE (coordinates),
+// iptoasn (ASN + network name — this is what unlocks the RDAP autnum enrichment
+// and RPKI), geofeeds (RDAP-discovered), plus anycast classification and RPKI
+// origin validation, and reverse DNS. Mirrors cmd/geo-server.
 func Register(s *grpc.Server) {
 	pb.RegisterLocalLookupServer(s, &localLookupServer{})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	boot, err := rdap.NewBootstrap(ctx)
-	cancel()
-	if err != nil {
-		log.Printf("proto-ip: RDAP bootstrap failed (%v); RDAPLookup skipped, GeoLookup empty", err)
-		pb.RegisterGeoLookupServer(s, geoip.NewServer())
-		return
+	dataDir := os.Getenv(GeoDataDirEnv)
+	if dataDir == "" {
+		dataDir = "data/geoip"
 	}
 
-	client := rdap.NewClient(boot)
-	pb.RegisterRDAPLookupServer(s, rdap.NewServer(client))
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	boot, bootErr := rdap.NewBootstrap(ctx)
+	cancel()
+	var rdapClient *rdap.Client
+	if bootErr != nil {
+		log.Printf("proto-ip: RDAP bootstrap failed (%v); RDAPLookup + geo AS enrichment/geofeeds disabled", bootErr)
+	} else {
+		rdapClient = rdap.NewClient(boot)
+		pb.RegisterRDAPLookupServer(s, rdap.NewServer(rdapClient))
+	}
 
-	geo := geoip.NewServer(geoip.NewGeofeedSource(client)).
-		WithASNEnrichment(client).
-		WithReverseDNS(nil) // net.DefaultResolver
+	var sources []geoip.Source
+	if p, err := geoip.FindIPMapDatabase(dataDir); err == nil {
+		if src, err := geoip.NewIPMapSource(p); err == nil {
+			sources = append(sources, src)
+			log.Printf("proto-ip geo: RIPE IPmap loaded (%s)", p)
+		}
+	}
+	if p, err := geoip.FindDBIPDatabase(dataDir); err == nil {
+		if src, err := geoip.NewDBIPSource(p); err == nil {
+			sources = append(sources, src)
+			log.Printf("proto-ip geo: DB-IP City Lite loaded (%s)", p)
+		}
+	}
+	if p, err := geoip.FindIP2LocationDatabase(dataDir); err == nil {
+		if src, err := geoip.NewIP2LocationSource(p); err == nil {
+			sources = append(sources, src)
+			log.Printf("proto-ip geo: IP2Location LITE loaded (%s)", p)
+		}
+	}
+	if v4, v6, ok := geoip.FindIPtoASNDatabases(dataDir); ok {
+		if src, err := geoip.NewIPtoASNSource(v4, v6); err != nil {
+			log.Printf("proto-ip geo: iptoasn load failed: %v", err)
+		} else {
+			sources = append(sources, src)
+			log.Printf("proto-ip geo: iptoasn loaded (%s)", src.Summary())
+		}
+	} else {
+		log.Printf("proto-ip geo: iptoasn tsvs not found in %s — ASN/network + RDAP autnum enrichment will be empty", dataDir)
+	}
+	if rdapClient != nil {
+		sources = append(sources, geoip.NewGeofeedSource(rdapClient))
+	}
+
+	geo := geoip.NewServer(sources...)
+	if v4, v6, ok := geoip.FindAnycastFiles(dataDir); ok {
+		if a, err := geoip.NewAnycastSet(v4, v6); err == nil {
+			geo = geo.WithAnycast(a)
+			log.Printf("proto-ip geo: anycast classifier enabled (%d prefixes)", a.Len())
+		}
+	}
+	if p, err := geoip.FindRPKIDatabase(dataDir); err == nil {
+		if r, err := geoip.NewRPKISet(p); err == nil {
+			geo = geo.WithRPKI(r)
+			log.Printf("proto-ip geo: RPKI validation enabled (%d VRPs)", r.Len())
+		}
+	}
+	if rdapClient != nil {
+		geo = geo.WithASNEnrichment(rdapClient)
+	}
+	geo = geo.WithReverseDNS(nil) // net.DefaultResolver
 	pb.RegisterGeoLookupServer(s, geo)
 }
 
